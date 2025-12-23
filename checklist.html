@@ -1,0 +1,1323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Daily Checklist + Weekly Goals</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --text:#e7eefc;
+      --muted:#9bb0d0;
+      --border:rgba(255,255,255,.08);
+      --accent:#5aa6ff;
+      --good:#46e3a6;
+      --danger:#ff5a7a;
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: radial-gradient(1200px 600px at 20% 10%, #13223a 0%, transparent 60%),
+                  radial-gradient(1000px 500px at 80% 0%, #1b2a44 0%, transparent 55%),
+                  var(--bg);
+      color:var(--text);
+    }
+    header{
+      position:sticky; top:0;
+      backdrop-filter: blur(10px);
+      background: rgba(11,15,20,.6);
+      border-bottom:1px solid var(--border);
+      z-index:10;
+    }
+    .topbar{
+      max-width:1200px;
+      margin:0 auto;
+      padding:14px 18px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      justify-content:space-between;
+    }
+    .titleWrap{
+      display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+    }
+    .dayTitle{
+      font-size:28px;
+      font-weight:800;
+      letter-spacing:.2px;
+      outline:none;
+      border-radius:10px;
+      padding:4px 10px;
+      background:transparent;
+    }
+    .dayTitle:focus{
+      background: rgba(255,255,255,.06);
+      box-shadow: 0 0 0 2px rgba(90,166,255,.25);
+    }
+    .status{
+      font-size:13px;
+      color:var(--muted);
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+    }
+    .pill{
+      border:1px solid var(--border);
+      border-radius:999px;
+      padding:6px 10px;
+      background: rgba(255,255,255,.03);
+      white-space:nowrap;
+    }
+    .btn{
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color:var(--text);
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      transition:.15s;
+      display:inline-flex; align-items:center; gap:8px;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ background: rgba(255,255,255,.08); }
+    .btn.danger{ border-color: rgba(255,90,122,.35); }
+    .btn.danger:hover{ background: rgba(255,90,122,.12); }
+    .btn.primary{ border-color: rgba(90,166,255,.35); }
+    .btn.primary:hover{ background: rgba(90,166,255,.12); }
+
+    main{
+      max-width:1200px;
+      margin:18px auto;
+      padding:0 18px 28px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.55fr 1fr;
+      gap:16px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
+      border:1px solid var(--border);
+      border-radius:16px;
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHeader{
+      padding:14px 14px 12px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+    }
+    .cardTitle{
+      font-weight:800;
+      letter-spacing:.2px;
+      color:var(--text);
+      font-size:18px;
+    }
+    .cardBody{ padding:14px; }
+
+    /* Sections */
+    .section{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background: rgba(0,0,0,.18);
+      overflow:hidden;
+      margin-bottom:12px;
+    }
+    .sectionTop{
+      padding:10px 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      border-bottom:1px solid var(--border);
+      background: rgba(255,255,255,.03);
+    }
+    .sectionLeft{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width:0;
+      flex:1;
+    }
+    .sectionName{
+      font-weight:800;
+      outline:none;
+      border-radius:10px;
+      padding:4px 8px;
+      min-width:0;
+      flex:1;
+    }
+    .sectionName:focus{
+      background: rgba(255,255,255,.06);
+      box-shadow: 0 0 0 2px rgba(90,166,255,.25);
+    }
+    .sectionActions{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .items{ list-style:none; margin:0; padding:10px 10px 6px; }
+    .items.drag-over{
+      outline: 2px dashed rgba(90,166,255,.55);
+      outline-offset: 6px;
+      border-radius: 12px;
+    }
+    .item{
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      padding:8px 8px;
+      border-radius:12px;
+      transition:.12s;
+    }
+    .item.dragging{ opacity:.45; }
+    .item:hover{ background: rgba(255,255,255,.04); }
+    .item input[type="checkbox"]{
+      margin-top:3px;
+      width:18px; height:18px;
+      accent-color: var(--good);
+      cursor:pointer;
+    }
+    .itemText{
+      flex:1;
+      outline:none;
+      border-radius:10px;
+      padding:3px 6px;
+      line-height:1.3;
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+    .itemText:focus{
+      background: rgba(255,255,255,.06);
+      box-shadow: 0 0 0 2px rgba(90,166,255,.22);
+    }
+    .item.required .itemText{
+      color: var(--accent);
+      font-weight:700;
+    }
+    .item.done .itemText{
+      text-decoration: line-through;
+      color: rgba(231,238,252,.55);
+      font-weight:600;
+    }
+    .tinyBtn{
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      color: var(--muted);
+      padding:6px 8px;
+      border-radius:10px;
+      cursor:pointer;
+      transition:.12s;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .tinyBtn:hover{ background: rgba(255,255,255,.08); color: var(--text); }
+    .tinyBtn.danger{ border-color: rgba(255,90,122,.35); color:#ff9ab0; }
+    .tinyBtn.danger:hover{ background: rgba(255,90,122,.12); color: #ffd1db; }
+    .tinyBtn.accent{ border-color: rgba(90,166,255,.35); color:#b9d8ff; }
+
+    .addRow{
+      display:flex;
+      gap:8px;
+      padding:10px;
+      border-top:1px dashed rgba(255,255,255,.12);
+      background: rgba(255,255,255,.02);
+    }
+    .input{
+      flex:1;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background: rgba(0,0,0,.25);
+      color:var(--text);
+      outline:none;
+    }
+    .input:focus{
+      box-shadow: 0 0 0 2px rgba(90,166,255,.22);
+      border-color: rgba(90,166,255,.35);
+    }
+    .checkPill{
+      display:flex; align-items:center; gap:8px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:0 10px;
+      background: rgba(0,0,0,.25);
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .checkPill input{ width:16px; height:16px; accent-color: var(--accent); }
+    section {
+      margin-bottom:20px;
+    }
+    /* NEW: section bottom delete */
+    .sectionBottomActions{
+      padding:10px;
+      border-top:1px dashed rgba(255,255,255,.12);
+      background: rgba(255,255,255,.02);
+      display:flex;
+      justify-content:flex-end;
+      gap:8px;
+    }
+
+    /* Weekly header */
+    .weekRow{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      color:var(--muted);
+      font-size:12px;
+      margin-top:6px;
+      display:none;
+    }
+
+    /* Goals */
+    .meterCard{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background: rgba(0,0,0,.18);
+      overflow:hidden;
+      margin-bottom:12px;
+    }
+    .meterTop{
+      padding:12px;
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:10px;
+      border-bottom:1px solid var(--border);
+      background: rgba(255,255,255,.03);
+      align-items:center;
+    }
+    .meterTopLeft{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-width:0;
+      flex-wrap:wrap;
+    }
+    .meterName{
+      font-weight:850;
+      outline:none;
+      padding:4px 8px;
+      border-radius:10px;
+      min-width: 220px;
+      max-width: 100%;
+      white-space:normal;
+      overflow:visible;
+      text-overflow:unset;
+      line-height:1.2;
+    }
+    .meterName:focus{
+      background: rgba(255,255,255,.06);
+      box-shadow: 0 0 0 2px rgba(90,166,255,.22);
+    }
+    .meterMeta{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+    }
+    .barRow{
+      padding:12px 12px 10px;
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:10px;
+      align-items:center;
+    }
+    .bar{
+      height:14px;
+      border-radius:999px;
+      background: rgba(255,255,255,.08);
+      overflow:hidden;
+      border:1px solid var(--border);
+    }
+    .fill{
+      height:100%;
+      width:0%;
+      border-radius:999px;
+      background: linear-gradient(90deg, rgba(90,166,255,.95), rgba(70,227,166,.95));
+      transition: width .25s ease;
+    }
+
+    /* UPDATED: meterControls is now an accordion wrapper */
+    .meterControls{
+      border-top:1px dashed rgba(255,255,255,.12);
+      background: rgba(255,255,255,.02);
+      padding:0;
+    }
+    .meterAccordionHeader{
+      width:100%;
+      border:0;
+      background: transparent;
+      color: var(--text);
+      padding:10px 12px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      cursor:pointer;
+      user-select:none;
+      text-align:left;
+    }
+    .meterAccordionHeader:hover{
+      background: rgba(255,255,255,.035);
+    }
+    .meterAccordionLeft{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      min-width:0;
+    }
+    .meterAccordionTitle{
+      font-weight:800;
+      letter-spacing:.2px;
+      color: var(--text);
+    }
+    .meterCaret{
+      display:inline-block;
+      transition: transform .15s ease;
+      opacity:.9;
+    }
+    /* closed = caret flips */
+    .meterControls.closed .meterCaret{
+      transform: rotate(-90deg);
+    }
+    .meterAccordionBody{
+      padding:12px;
+      display:grid;
+      grid-template-columns: 110px 1fr;
+      gap:10px;
+      align-items:end;
+    }
+    .meterControls.closed .meterAccordionBody{
+      display:none;
+    }
+    @media (max-width: 980px){
+      .meterAccordionBody{ grid-template-columns: 1fr; }
+      .barRow{ grid-template-columns: 1fr; }
+    }
+
+    .controlGroup{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      min-width:0;
+    }
+    .label{
+      font-size:12px;
+      color:var(--muted);
+    }
+    .smallInput{
+      width:100%;
+      padding:10px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background: rgba(0,0,0,.25);
+      color:var(--text);
+      outline:none;
+    }
+    .smallInput:focus{
+      box-shadow: 0 0 0 2px rgba(90,166,255,.22);
+      border-color: rgba(90,166,255,.35);
+    }
+    .progressRow{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .progressRow .smallInput{
+      flex: 1 1 140px;
+      min-width:140px;
+    }
+
+    /* NEW: goal delete row inside accordion */
+    .meterAccordionFooter{
+      grid-column: 1 / -1;
+      display:flex;
+      justify-content:flex-end;
+      padding-top:6px;
+    }
+
+    .emptyHint{
+      color:var(--muted);
+      font-size:13px;
+      line-height:1.4;
+      padding:8px 2px 0;
+    }
+
+    .help{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+    .footerNote{
+      margin-top:10px;
+      font-size:12px;
+      color:var(--muted);
+      opacity:.9;
+    }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .notes {
+      margin-top:20px;
+    }
+    .notes .sectionName {
+      padding-left:0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div class="titleWrap">
+        <div id="dayTitle" class="dayTitle" contenteditable="true" spellcheck="false">Day 1</div>
+        <div class="status">
+          <span class="pill">Autosave: <span id="saveState">loaded</span></span>
+          <span class="pill" id="weekPill">Week: —</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+        <button class="btn primary" id="exportBtn">Export JSON</button>
+        <button class="btn" id="importBtn">Import JSON</button>
+        <button class="btn danger" id="resetBtn">Reset All</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <!-- LEFT: Checklist -->
+      <section class="card">
+        <div class="cardHeader">
+          <div class="cardTitle">Checklists</div>
+          <button class="btn" id="addSectionBtn">+ Add Section</button>
+        </div>
+        <div class="cardBody" id="sectionsRoot"></div>
+      </section>
+
+      <!-- RIGHT: Weekly goals -->
+      <aside class="card">
+        <div class="cardHeader">
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <div class="cardTitle">Weekly Goals</div>
+            <div class="weekRow" id="weekRow"></div>
+          </div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+            <button class="btn primary" id="addGoalBtn">+ Add Goal</button>
+            <button class="btn" id="resetWeekBtn" title="Resets only current progress values (not goals).">Reset Week</button>
+          </div>
+        </div>
+
+        <div class="cardBody" id="metersRoot"></div>
+
+        <div class="cardBody" style="padding-top:0;">
+          <div class="help">
+          </div>
+          <div class="footerNote">
+            Storage note: cookies have size limits. This page uses <span class="mono">chunked cookies</span>.
+          </div>
+        </div>
+      </aside>
+    </div>
+    <section class="card">
+      <div class="cardHeader cardTitle">Daily Readings</div>
+      <div class="cardBody">
+        <p>Make a Clear Plan: You need to know what you want before you can chase it. You need a clear Big Goal (1-3 years), and Monthly & Weekly goals along the way. Goal Crushers is absolutely Mandatory for you every week. Take it seriously.</p>
+        <p>I believe that abilities and intelligence can be developed over time through ruthless hard work and brute force. I embrace challenges as opportunities to grow. I relish the hard times because I know that's where 95% of fixed mindset losers quit. I know that EFFORT is the path to mastery. I learn from criticism and am not afraid to be brutally critical of my own shortcomings, and I CHOOSE to find lessons from every setback. No failure is final for me, it's merely a chance to become a smarter, stronger, better person.</p>
+        <p>This is the type of action, language and mindset that we must avoid. Thank you God for reminding of the type of language that we must avoid.</p>
+      </div>
+    </section>
+  </main>
+
+  <input type="file" id="importFile" accept="application/json" style="display:none;" />
+
+<script>
+/* =========================
+   Cookie storage (chunked)
+   ========================= */
+const COOKIE_PREFIX = "dailyChecklistState_v6_";
+const COOKIE_COUNT  = COOKIE_PREFIX + "chunks";
+const COOKIE_DAYS   = 365;
+const CHUNK_SIZE    = 3200;
+
+function setCookie(name, value, days){
+  const expires = days ? "; expires=" + new Date(Date.now() + days*864e5).toUTCString() : "";
+  document.cookie = name + "=" + value + expires + "; path=/; SameSite=Lax";
+}
+function getCookie(name){
+  const match = document.cookie.match(new RegExp("(^| )" + name.replace(/[.$?*|{}()[\]\\/+^]/g, "\\$&") + "=([^;]+)"));
+  return match ? match[2] : null;
+}
+function eraseCookie(name){
+  document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+}
+function toB64(str){ return btoa(unescape(encodeURIComponent(str))); }
+function fromB64(b64){ return decodeURIComponent(escape(atob(b64))); }
+
+function saveStateToCookies(stateObj){
+  const json = JSON.stringify(stateObj);
+  const b64 = toB64(json);
+
+  const oldCount = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
+  for(let i=0;i<oldCount;i++) eraseCookie(COOKIE_PREFIX + i);
+
+  const chunks = [];
+  for(let i=0;i<b64.length;i+=CHUNK_SIZE) chunks.push(b64.slice(i, i+CHUNK_SIZE));
+
+  setCookie(COOKIE_COUNT, String(chunks.length), COOKIE_DAYS);
+  chunks.forEach((chunk, i) => setCookie(COOKIE_PREFIX + i, chunk, COOKIE_DAYS));
+}
+function loadStateFromCookies(){
+  const count = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
+  if(!count) return null;
+
+  let b64 = "";
+  for(let i=0;i<count;i++){
+    const part = getCookie(COOKIE_PREFIX + i);
+    if(part == null) return null;
+    b64 += part;
+  }
+  try{
+    const json = fromB64(b64);
+    return JSON.parse(json);
+  }catch(e){
+    console.warn("Failed to parse cookie state:", e);
+    return null;
+  }
+}
+
+/* =========================
+   Helpers
+   ========================= */
+function uid(){
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+function localDateKey(d = new Date()){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function daysBetweenLocal(isoStart, isoEnd){
+  const [sy, sm, sd] = isoStart.split("-").map(Number);
+  const [ey, em, ed] = isoEnd.split("-").map(Number);
+  const start = new Date(sy, sm-1, sd, 12, 0, 0);
+  const end   = new Date(ey, em-1, ed, 12, 0, 0);
+  return Math.round((end - start) / 86400000);
+}
+function computeDayTitle(st){
+  const today = localDateKey();
+  const diff = daysBetweenLocal(st.dayBaseDate, today);
+  const dayNumber = Math.max(1, st.dayBaseNumber + diff);
+  return `Day ${dayNumber}`;
+}
+
+/* Week starts Monday */
+const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+function startOfWeekMonday(d = new Date()){
+  const noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+  const dow = noon.getDay();
+  const offset = (dow + 6) % 7;
+  const monday = new Date(noon);
+  monday.setDate(noon.getDate() - offset);
+  return monday;
+}
+function formatDateShort(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function weekProgressLabel(d = new Date()){
+  const dow = d.getDay();
+  const n = ((dow + 6) % 7) + 1;
+  return `${DAY_NAMES[dow]} • ${n}/7`;
+}
+
+/* =========================
+   Defaults (EMPTY by default)
+   ========================= */
+const DEFAULT_STATE = {
+  dayBaseNumber: 1,
+  dayBaseDate: localDateKey(),
+  lastDailyResetDate: localDateKey(),
+  sections: [],
+  meters: []
+};
+
+/* =========================
+   Migrate
+   ========================= */
+function migrateIfNeeded(st){
+  if(!st || typeof st !== "object") return structuredClone(DEFAULT_STATE);
+
+  if((st.dayBaseNumber == null || st.dayBaseDate == null) && typeof st.dayTitle === "string"){
+    const m = st.dayTitle.match(/(\d+)/);
+    st.dayBaseNumber = m ? parseInt(m[1], 10) : 1;
+    st.dayBaseDate = localDateKey();
+    delete st.dayTitle;
+  }
+
+  if(st.dayBaseNumber == null) st.dayBaseNumber = 1;
+  if(st.dayBaseDate == null) st.dayBaseDate = localDateKey();
+  if(typeof st.lastDailyResetDate !== "string") st.lastDailyResetDate = localDateKey();
+  if(!Array.isArray(st.sections)) st.sections = [];
+  if(!Array.isArray(st.meters)) st.meters = [];
+
+  st.meters = st.meters.map(m => {
+    const defaultOpen = (m && typeof m.controlsOpen === "boolean") ? m.controlsOpen : true;
+
+    if(!m || typeof m !== "object") {
+      return { id: uid(), title:"Weekly Goal", goal:0, current:0, unitLabel:"units", controlsOpen: true };
+    }
+
+    if(m.goalMinutes != null || m.currentMinutes != null){
+      return {
+        id: m.id || uid(),
+        title: m.title || "Weekly Goal",
+        goal: +m.goalMinutes || 0,
+        current: +m.currentMinutes || 0,
+        unitLabel: "min",
+        controlsOpen: defaultOpen
+      };
+    }
+
+    return {
+      id: m.id || uid(),
+      title: m.title || "Weekly Goal",
+      goal: Math.max(0, parseFloat(m.goal ?? 0)),
+      current: Math.max(0, parseFloat(m.current ?? 0)),
+      unitLabel: (typeof m.unitLabel === "string" && m.unitLabel.trim()) ? m.unitLabel.trim() : "units",
+      controlsOpen: defaultOpen
+    };
+  });
+
+  return st;
+}
+
+let state = migrateIfNeeded(loadStateFromCookies() || structuredClone(DEFAULT_STATE));
+
+/* =========================
+   Autosave (2s debounce)
+   ========================= */
+const SAVE_DEBOUNCE_MS = 1000;
+const saveStateEl = document.getElementById("saveState");
+let saveTimer = null;
+
+function markSaving(){ saveStateEl.textContent = "saving…"; }
+function markSaved(){ saveStateEl.textContent = "saved"; }
+
+function saveNow(){
+  try{
+    saveStateToCookies(state);
+    markSaved();
+  }catch(e){
+    console.error(e);
+    saveStateEl.textContent = "save failed";
+  }
+}
+function scheduleSave(){
+  markSaving();
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, SAVE_DEBOUNCE_MS);
+}
+
+/* =========================
+   Daily reset: uncheck everything once per new day
+   ========================= */
+function resetChecklistForNewDay(){
+  state.sections.forEach(sec => sec.items.forEach(it => { it.done = false; }));
+}
+function dailyResetIfNeeded(){
+  const today = localDateKey();
+  if(state.lastDailyResetDate !== today){
+    resetChecklistForNewDay();
+    state.lastDailyResetDate = today;
+    scheduleSave();
+    render();
+  }
+}
+
+/* =========================
+   Drag + drop between sections
+   ========================= */
+let dragInfo = null;
+function findSectionById(sectionId){
+  return state.sections.find(s => s.id === sectionId);
+}
+
+/* =========================
+   Rendering
+   ========================= */
+const sectionsRoot = document.getElementById("sectionsRoot");
+const metersRoot   = document.getElementById("metersRoot");
+const weekRowEl    = document.getElementById("weekRow");
+const weekPillEl   = document.getElementById("weekPill");
+
+function sectionCounts(section){
+  let total = 0, done = 0;
+  section.items.forEach(it => { total++; if(it.done) done++; });
+  return { done, total };
+}
+
+function renderWeekInfo(){
+  const now = new Date();
+  const monday = startOfWeekMonday(now);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+
+  const label = weekProgressLabel(now);
+  const range = `${formatDateShort(monday)} → ${formatDateShort(sunday)}`;
+
+  weekRowEl.innerHTML = `
+    <span class="pill">${range}</span>
+  `;
+  weekPillEl.textContent = `Week: ${label}`;
+}
+
+function render(){
+  const dayTitleEl = document.getElementById("dayTitle");
+  const computed = computeDayTitle(state);
+  if(document.activeElement !== dayTitleEl && dayTitleEl.textContent !== computed){
+    dayTitleEl.textContent = computed;
+  }
+
+  renderWeekInfo();
+
+  // Sections
+  sectionsRoot.innerHTML = "";
+  if(state.sections.length === 0){
+    const hint = document.createElement("div");
+    hint.className = "emptyHint";
+    hint.textContent = "No sections yet. Click “+ Add Section” to start your checklist.";
+    sectionsRoot.appendChild(hint);
+  }
+
+  state.sections.forEach(section => {
+    const sec = document.createElement("div");
+    sec.className = "section";
+
+    const top = document.createElement("div");
+    top.className = "sectionTop";
+
+    // LEFT: title
+    const left = document.createElement("div");
+    left.className = "sectionLeft";
+
+    const name = document.createElement("div");
+    name.className = "sectionName";
+    name.contentEditable = "true";
+    name.spellcheck = false;
+    name.textContent = section.title || "Untitled";
+    name.addEventListener("input", () => {
+      section.title = name.textContent.trim() || "Untitled";
+      scheduleSave();
+    });
+
+    left.appendChild(name);
+
+    // RIGHT: Done pill (delete moved to bottom)
+    const actions = document.createElement("div");
+    actions.className = "sectionActions";
+
+    const donePill = document.createElement("span");
+    donePill.className = "pill";
+    const counts = sectionCounts(section);
+    donePill.textContent = `Done: ${counts.done}/${counts.total}`;
+
+    actions.appendChild(donePill);
+
+    top.appendChild(left);
+    top.appendChild(actions);
+
+    const ul = document.createElement("ul");
+    ul.className = "items";
+    ul.dataset.sectionId = section.id;
+
+    ul.addEventListener("dragover", (e) => { e.preventDefault(); ul.classList.add("drag-over"); });
+    ul.addEventListener("dragleave", () => ul.classList.remove("drag-over"));
+    ul.addEventListener("drop", (e) => {
+      e.preventDefault();
+      ul.classList.remove("drag-over");
+      if(!dragInfo) return;
+
+      const toSectionId = ul.dataset.sectionId;
+      const fromSection = findSectionById(dragInfo.fromSectionId);
+      const toSection   = findSectionById(toSectionId);
+      if(!fromSection || !toSection) return;
+
+      const fromIndex = fromSection.items.findIndex(it => it.id === dragInfo.itemId);
+      if(fromIndex < 0) return;
+
+      const [movedItem] = fromSection.items.splice(fromIndex, 1);
+
+      const liTarget = e.target.closest("li.item");
+      if(liTarget?.dataset?.itemId){
+        const beforeId = liTarget.dataset.itemId;
+        const insertIndex = toSection.items.findIndex(it => it.id === beforeId);
+        if(insertIndex >= 0) toSection.items.splice(insertIndex, 0, movedItem);
+        else toSection.items.push(movedItem);
+      }else{
+        toSection.items.push(movedItem);
+      }
+
+      dragInfo = null;
+      scheduleSave();
+      render();
+    });
+
+    section.items.forEach(item => {
+      const li = document.createElement("li");
+      li.className = "item" + (item.required ? " required" : "") + (item.done ? " done" : "");
+      li.dataset.sectionId = section.id;
+      li.dataset.itemId = item.id;
+      li.draggable = true;
+
+      li.addEventListener("dragstart", (e) => {
+        dragInfo = { fromSectionId: section.id, itemId: item.id };
+        li.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", item.id);
+      });
+      li.addEventListener("dragend", () => li.classList.remove("dragging"));
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = !!item.done;
+      cb.addEventListener("change", () => {
+        item.done = cb.checked;
+        scheduleSave();
+        render();
+      });
+
+      const txt = document.createElement("div");
+      txt.className = "itemText";
+      txt.contentEditable = "true";
+      txt.spellcheck = false;
+      txt.textContent = item.text || "";
+      txt.addEventListener("input", () => {
+        item.text = txt.textContent;
+        scheduleSave();
+      });
+
+      const dailyBtn = document.createElement("button");
+      dailyBtn.className = "tinyBtn accent";
+      dailyBtn.textContent = item.required ? "Daily" : "Today";
+      dailyBtn.addEventListener("click", () => {
+        item.required = !item.required;
+        scheduleSave();
+        render();
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "tinyBtn danger";
+      delBtn.textContent = "✕";
+      delBtn.addEventListener("click", () => {
+        section.items = section.items.filter(it => it.id !== item.id);
+        scheduleSave();
+        render();
+      });
+
+      li.appendChild(cb);
+      li.appendChild(txt);
+      li.appendChild(dailyBtn);
+      li.appendChild(delBtn);
+      ul.appendChild(li);
+    });
+
+    const addRow = document.createElement("div");
+    addRow.className = "addRow";
+
+    const addInput = document.createElement("input");
+    addInput.className = "input";
+    addInput.placeholder = "Add a new item… (press Enter)";
+    addInput.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); addBtn.click(); }
+    });
+
+    const reqWrap = document.createElement("label");
+    reqWrap.className = "checkPill";
+    reqWrap.innerHTML = `<input type="checkbox"> <span>Daily</span>`;
+    const reqBox = reqWrap.querySelector("input");
+
+    const addBtn = document.createElement("button");
+    addBtn.className = "btn primary";
+    addBtn.textContent = "Add";
+    addBtn.addEventListener("click", () => {
+      const val = addInput.value.trim();
+      if(!val) return;
+      section.items.push({ id: uid(), text: val, done: false, required: reqBox.checked });
+      addInput.value = "";
+      reqBox.checked = false;
+      scheduleSave();
+      render();
+    });
+
+    addRow.appendChild(addInput);
+    addRow.appendChild(reqWrap);
+    addRow.appendChild(addBtn);
+
+    // NEW: section delete at bottom
+    const bottomActions = document.createElement("div");
+    bottomActions.className = "sectionBottomActions";
+
+    const delSec = document.createElement("button");
+    delSec.className = "tinyBtn danger";
+    delSec.textContent = "Delete";
+    delSec.addEventListener("click", () => {
+      if(!confirm(`Delete section "${section.title}"?`)) return;
+      state.sections = state.sections.filter(s => s.id !== section.id);
+      scheduleSave();
+      render();
+    });
+
+    bottomActions.appendChild(delSec);
+
+    sec.appendChild(top);
+    sec.appendChild(ul);
+    sec.appendChild(addRow);
+    sec.appendChild(bottomActions);
+    sectionsRoot.appendChild(sec);
+  });
+
+  // Weekly goals
+  metersRoot.innerHTML = "";
+  if(state.meters.length === 0){
+    const hint = document.createElement("div");
+    hint.className = "emptyHint";
+    hint.textContent = "No weekly goals yet. Click “+ Add Goal” to create one.";
+    metersRoot.appendChild(hint);
+  }
+
+  state.meters.forEach(meter => {
+    const card = document.createElement("div");
+    card.className = "meterCard";
+
+    const top = document.createElement("div");
+    top.className = "meterTop";
+
+    const left = document.createElement("div");
+    left.className = "meterTopLeft";
+
+    const name = document.createElement("div");
+    name.className = "meterName";
+    name.contentEditable = "true";
+    name.spellcheck = false;
+    name.textContent = meter.title || "Weekly Goal";
+    name.addEventListener("input", () => {
+      meter.title = name.textContent.trim() || "Weekly Goal";
+      scheduleSave();
+    });
+
+    left.appendChild(name);
+
+    const meta = document.createElement("div");
+    meta.className = "meterMeta";
+
+    const progressPill = document.createElement("span");
+    progressPill.className = "pill";
+
+    top.appendChild(left);
+    top.appendChild(meta);
+    meta.appendChild(progressPill);
+
+    const barRow = document.createElement("div");
+    barRow.className = "barRow";
+
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    const fill = document.createElement("div");
+    fill.className = "fill";
+    bar.appendChild(fill);
+
+    const pctPill = document.createElement("span");
+    pctPill.className = "pill";
+
+    barRow.appendChild(bar);
+    barRow.appendChild(pctPill);
+
+    // Accordion controls
+    const isOpen = (typeof meter.controlsOpen === "boolean") ? meter.controlsOpen : true;
+
+    const controls = document.createElement("div");
+    controls.className = "meterControls" + (isOpen ? "" : " closed");
+
+    const accHeader = document.createElement("button");
+    accHeader.type = "button";
+    accHeader.className = "meterAccordionHeader";
+    accHeader.innerHTML = `
+      <span class="meterAccordionLeft">
+        <span class="meterCaret">▾</span>
+        <span class="meterAccordionTitle">Controls</span>
+      </span>
+      <span class="pill" style="opacity:.85;">${isOpen ? "Hide" : "Show"}</span>
+    `;
+    accHeader.addEventListener("click", () => {
+      meter.controlsOpen = !((typeof meter.controlsOpen === "boolean") ? meter.controlsOpen : true);
+      scheduleSave();
+      render();
+    });
+
+    const accBody = document.createElement("div");
+    accBody.className = "meterAccordionBody";
+
+    const unitGroup = document.createElement("div");
+    unitGroup.className = "controlGroup";
+    unitGroup.innerHTML = `<div class="label">Unit</div>`;
+    const unitInput = document.createElement("input");
+    unitInput.className = "smallInput";
+    unitInput.type = "text";
+    unitInput.value = (meter.unitLabel || "units").trim() || "units";
+    unitInput.placeholder = "min";
+    unitInput.addEventListener("input", () => {
+      meter.unitLabel = unitInput.value.trim() || "units";
+      updateMeterUI();
+      scheduleSave();
+    });
+    unitGroup.appendChild(unitInput);
+
+    const goalGroup = document.createElement("div");
+    goalGroup.className = "controlGroup";
+    const goalLabel = document.createElement("div");
+    goalLabel.className = "label";
+    goalGroup.appendChild(goalLabel);
+    const goalInput = document.createElement("input");
+    goalInput.className = "smallInput";
+    goalInput.type = "number";
+    goalInput.min = "0";
+    goalInput.step = "1";
+    goalInput.value = Math.max(0, parseFloat(meter.goal || 0));
+    goalInput.addEventListener("input", () => {
+      meter.goal = Math.max(0, parseFloat(goalInput.value || "0"));
+      updateMeterUI();
+      scheduleSave();
+    });
+    goalGroup.appendChild(goalInput);
+
+    const progGroup = document.createElement("div");
+    progGroup.className = "controlGroup";
+    progGroup.style.gridColumn = "1 / -1";
+    progGroup.innerHTML = `<div class="label">Progress</div>`;
+
+    const progRow = document.createElement("div");
+    progRow.className = "progressRow";
+
+    const addVal = document.createElement("input");
+    addVal.className = "smallInput";
+    addVal.type = "number";
+    addVal.min = "0";
+    addVal.step = "1";
+
+    const addBtn2 = document.createElement("button");
+    addBtn2.className = "btn primary";
+    addBtn2.textContent = "+ Add";
+    addBtn2.addEventListener("click", () => {
+      const v = Math.max(0, parseFloat(addVal.value || "0"));
+      if(!v) return;
+      meter.current = Math.max(0, parseFloat(meter.current || 0) + v);
+      addVal.value = "";
+      updateMeterUI();
+      scheduleSave();
+    });
+
+    const setBtn = document.createElement("button");
+    setBtn.className = "btn";
+    setBtn.textContent = "Set";
+    setBtn.addEventListener("click", () => {
+      const unit = ((meter.unitLabel || "units").trim() || "units");
+      const v = prompt(`Set "${meter.title}" current ${unit} to:`, String(meter.current || 0));
+      if(v == null) return;
+      const n = Math.max(0, parseFloat(v || "0"));
+      if(Number.isNaN(n)) return;
+      meter.current = n;
+      updateMeterUI();
+      scheduleSave();
+    });
+
+    const resetOneBtn = document.createElement("button");
+    resetOneBtn.className = "btn danger";
+    resetOneBtn.textContent = "Reset";
+    resetOneBtn.addEventListener("click", () => {
+      meter.current = 0;
+      updateMeterUI();
+      scheduleSave();
+    });
+
+    addVal.addEventListener("keydown", (e) => {
+      if(e.key === "Enter"){ e.preventDefault(); addBtn2.click(); }
+    });
+
+    progRow.appendChild(addVal);
+    progRow.appendChild(addBtn2);
+    progRow.appendChild(setBtn);
+    progRow.appendChild(resetOneBtn);
+    progGroup.appendChild(progRow);
+
+    // Delete inside accordion
+    const delRow = document.createElement("div");
+    delRow.className = "meterAccordionFooter";
+
+    const delGoal = document.createElement("button");
+    delGoal.className = "btn danger";
+    delGoal.textContent = "Delete Goal";
+    delGoal.addEventListener("click", () => {
+      if(!confirm(`Delete goal "${meter.title}"?`)) return;
+      state.meters = state.meters.filter(m => m.id !== meter.id);
+      scheduleSave();
+      render();
+    });
+    delRow.appendChild(delGoal);
+
+    accBody.appendChild(unitGroup);
+    accBody.appendChild(goalGroup);
+    accBody.appendChild(progGroup);
+    accBody.appendChild(delRow);
+
+    controls.appendChild(accHeader);
+    controls.appendChild(accBody);
+
+    card.appendChild(top);
+    card.appendChild(barRow);
+    card.appendChild(controls);
+
+    function updateMeterUI(){
+      const unit = ((meter.unitLabel || "units").trim() || "units");
+      const goal = Math.max(0, parseFloat(meter.goal || 0));
+      const current = Math.max(0, parseFloat(meter.current || 0));
+      const pct = Math.min(100, goal > 0 ? (current / goal) * 100 : 0);
+      const pctText = isFinite(pct) ? pct.toFixed(0) : "0";
+
+      progressPill.textContent = `${current}/${goal} ${unit}`;
+      pctPill.textContent = `${pctText}%`;
+      fill.style.width = Math.min(100, Math.max(0, pct)) + "%";
+
+      goalLabel.textContent = `Goal (${unit})`;
+      addVal.placeholder = `Add ${unit}…`;
+      setBtn.title = `Set current ${unit}`;
+    }
+    updateMeterUI();
+
+    metersRoot.appendChild(card);
+  });
+}
+
+/* =========================
+   Actions
+   ========================= */
+document.getElementById("dayTitle").addEventListener("input", (e) => {
+  const txt = e.target.textContent.trim();
+  const m = txt.match(/(\d+)/);
+  if(m){
+    state.dayBaseNumber = parseInt(m[1], 10);
+    state.dayBaseDate = localDateKey();
+    scheduleSave();
+  }
+});
+
+document.getElementById("addSectionBtn").addEventListener("click", () => {
+  state.sections.push({ id: uid(), title: "New Section", items: [] });
+  scheduleSave();
+  render();
+});
+
+document.getElementById("addGoalBtn").addEventListener("click", () => {
+  // NEW: controlsOpen defaults to true so a newly created goal auto-shows its accordion
+  state.meters.push({ id: uid(), title: "New Goal", goal: 0, current: 0, unitLabel: "units", controlsOpen: true });
+  scheduleSave();
+  render();
+});
+
+document.getElementById("resetWeekBtn").addEventListener("click", () => {
+  if(!confirm("Reset ALL weekly goals progress to 0?")) return;
+  state.meters.forEach(m => m.current = 0);
+  scheduleSave();
+  render();
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  if(!confirm("Reset EVERYTHING back to empty?")) return;
+
+  const count = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
+  for(let i=0;i<count;i++) eraseCookie(COOKIE_PREFIX + i);
+  eraseCookie(COOKIE_COUNT);
+
+  state = structuredClone(DEFAULT_STATE);
+  state.dayBaseDate = localDateKey();
+  state.lastDailyResetDate = localDateKey();
+
+  scheduleSave();
+  render();
+});
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "daily-checklist-state.json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
+document.getElementById("importBtn").addEventListener("click", () => {
+  document.getElementById("importFile").click();
+});
+document.getElementById("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const obj = migrateIfNeeded(JSON.parse(text));
+    if(!obj || typeof obj !== "object") throw new Error("Invalid JSON");
+    if(!Array.isArray(obj.sections) || !Array.isArray(obj.meters)) throw new Error("Missing sections/meters");
+    state = obj;
+    dailyResetIfNeeded();
+    scheduleSave();
+    render();
+  }catch(err){
+    alert("Import failed: " + err.message);
+  }finally{
+    e.target.value = "";
+  }
+});
+
+/* =========================
+   Midnight: advance day + uncheck all items
+   ========================= */
+function scheduleMidnightRefresh(){
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2);
+  setTimeout(() => {
+    dailyResetIfNeeded();
+    render();
+    scheduleSave();
+    scheduleMidnightRefresh();
+  }, next - now);
+}
+
+/* =========================
+   Init
+   ========================= */
+dailyResetIfNeeded();
+render();
+saveNow();
+scheduleMidnightRefresh();
+</script>
+</body>
+</html>
