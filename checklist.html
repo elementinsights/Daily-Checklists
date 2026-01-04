@@ -112,7 +112,6 @@
       padding:14px 14px 12px;
       border-bottom:1px solid var(--border);
       display:flex;
-      align-items:flex-start;
       justify-content:space-between;
       gap:10px;
       align-items:center;
@@ -213,6 +212,17 @@
       color: rgba(231,238,252,.55);
       font-weight:600;
     }
+
+    /* NEW: Important scheduled tasks */
+    .item.priority-high{
+      background: rgba(255,90,122,.10);
+      border: 1px solid rgba(255,90,122,.35);
+    }
+    .item.priority-high .itemText{
+      color: #ffd1db;
+      font-weight: 800;
+    }
+
     .tinyBtn{
       border:1px solid var(--border);
       background: rgba(255,255,255,.03);
@@ -259,10 +269,7 @@
       white-space:nowrap;
     }
     .checkPill input{ width:16px; height:16px; accent-color: var(--accent); }
-    section {
-      margin-bottom:20px;
-    }
-    /* NEW: section bottom delete */
+
     .sectionBottomActions{
       padding:10px;
       border-top:1px dashed rgba(255,255,255,.12);
@@ -353,7 +360,7 @@
       transition: width .25s ease;
     }
 
-    /* UPDATED: meterControls is now an accordion wrapper */
+    /* Accordion */
     .meterControls{
       border-top:1px dashed rgba(255,255,255,.12);
       background: rgba(255,255,255,.02);
@@ -392,7 +399,6 @@
       transition: transform .15s ease;
       opacity:.9;
     }
-    /* closed = caret flips */
     .meterControls.closed .meterCaret{
       transform: rotate(-90deg);
     }
@@ -444,8 +450,6 @@
       flex: 1 1 140px;
       min-width:140px;
     }
-
-    /* NEW: goal delete row inside accordion */
     .meterAccordionFooter{
       grid-column: 1 / -1;
       display:flex;
@@ -472,14 +476,64 @@
       opacity:.9;
     }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    .notes {
-      margin-top:20px;
+
+    /* Weekly goal add-history UI */
+    .historyHeaderRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:2px;
     }
-    .notes .sectionName {
-      padding-left:0;
+    .historyList{
+      list-style:none;
+      margin:0;
+      padding:0;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background: rgba(0,0,0,.18);
+      overflow:auto;
+      max-height: 170px;
+    }
+    .historyItem{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 10px;
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .historyItem:last-child{ border-bottom:0; }
+    .historyLeft{
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+      min-width:0;
+      flex:1;
+    }
+    .historyAmt{
+      font-weight:800;
+      color: #cfe5ff;
+      line-height:1.2;
+    }
+    .historyMeta{
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.2;
+      word-break:break-word;
+    }
+    .historyEmpty{
+      border:1px dashed rgba(255,255,255,.14);
+      border-radius:12px;
+      padding:10px 10px;
+      color: var(--muted);
+      font-size:12px;
+      background: rgba(0,0,0,.12);
     }
   </style>
 </head>
+
 <body>
   <header>
     <div class="topbar">
@@ -526,14 +580,14 @@
         <div class="cardBody" id="metersRoot"></div>
 
         <div class="cardBody" style="padding-top:0;">
-          <div class="help">
-          </div>
+          <div class="help"></div>
           <div class="footerNote">
             Storage note: cookies have size limits. This page uses <span class="mono">chunked cookies</span>.
           </div>
         </div>
       </aside>
     </div>
+
     <section class="card">
       <div class="cardHeader cardTitle">Daily Readings</div>
       <div class="cardBody">
@@ -546,778 +600,984 @@
 
   <input type="file" id="importFile" accept="application/json" style="display:none;" />
 
-<script>
-/* =========================
-   Cookie storage (chunked)
-   ========================= */
-const COOKIE_PREFIX = "dailyChecklistState_v6_";
-const COOKIE_COUNT  = COOKIE_PREFIX + "chunks";
-const COOKIE_DAYS   = 365;
-const CHUNK_SIZE    = 3200;
+  <script>
+    /* =========================
+       Cookie storage (chunked)
+       ========================= */
+    const COOKIE_PREFIX = "dailyChecklistState_v7_";
+    const COOKIE_COUNT  = COOKIE_PREFIX + "chunks";
+    const COOKIE_DAYS   = 365;
+    const CHUNK_SIZE    = 3200;
 
-function setCookie(name, value, days){
-  const expires = days ? "; expires=" + new Date(Date.now() + days*864e5).toUTCString() : "";
-  document.cookie = name + "=" + value + expires + "; path=/; SameSite=Lax";
-}
-function getCookie(name){
-  const match = document.cookie.match(new RegExp("(^| )" + name.replace(/[.$?*|{}()[\]\\/+^]/g, "\\$&") + "=([^;]+)"));
-  return match ? match[2] : null;
-}
-function eraseCookie(name){
-  document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
-}
-function toB64(str){ return btoa(unescape(encodeURIComponent(str))); }
-function fromB64(b64){ return decodeURIComponent(escape(atob(b64))); }
-
-function saveStateToCookies(stateObj){
-  const json = JSON.stringify(stateObj);
-  const b64 = toB64(json);
-
-  const oldCount = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
-  for(let i=0;i<oldCount;i++) eraseCookie(COOKIE_PREFIX + i);
-
-  const chunks = [];
-  for(let i=0;i<b64.length;i+=CHUNK_SIZE) chunks.push(b64.slice(i, i+CHUNK_SIZE));
-
-  setCookie(COOKIE_COUNT, String(chunks.length), COOKIE_DAYS);
-  chunks.forEach((chunk, i) => setCookie(COOKIE_PREFIX + i, chunk, COOKIE_DAYS));
-}
-function loadStateFromCookies(){
-  const count = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
-  if(!count) return null;
-
-  let b64 = "";
-  for(let i=0;i<count;i++){
-    const part = getCookie(COOKIE_PREFIX + i);
-    if(part == null) return null;
-    b64 += part;
-  }
-  try{
-    const json = fromB64(b64);
-    return JSON.parse(json);
-  }catch(e){
-    console.warn("Failed to parse cookie state:", e);
-    return null;
-  }
-}
-
-/* =========================
-   Helpers
-   ========================= */
-function uid(){
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-function localDateKey(d = new Date()){
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-  return `${y}-${m}-${day}`;
-}
-function daysBetweenLocal(isoStart, isoEnd){
-  const [sy, sm, sd] = isoStart.split("-").map(Number);
-  const [ey, em, ed] = isoEnd.split("-").map(Number);
-  const start = new Date(sy, sm-1, sd, 12, 0, 0);
-  const end   = new Date(ey, em-1, ed, 12, 0, 0);
-  return Math.round((end - start) / 86400000);
-}
-function computeDayTitle(st){
-  const today = localDateKey();
-  const diff = daysBetweenLocal(st.dayBaseDate, today);
-  const dayNumber = Math.max(1, st.dayBaseNumber + diff);
-  return `Day ${dayNumber}`;
-}
-
-/* Week starts Monday */
-const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
-function startOfWeekMonday(d = new Date()){
-  const noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
-  const dow = noon.getDay();
-  const offset = (dow + 6) % 7;
-  const monday = new Date(noon);
-  monday.setDate(noon.getDate() - offset);
-  return monday;
-}
-function formatDateShort(d){
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,"0");
-  const day = String(d.getDate()).padStart(2,"0");
-  return `${y}-${m}-${day}`;
-}
-function weekProgressLabel(d = new Date()){
-  const dow = d.getDay();
-  const n = ((dow + 6) % 7) + 1;
-  return `${DAY_NAMES[dow]} • ${n}/7`;
-}
-
-/* =========================
-   Defaults (EMPTY by default)
-   ========================= */
-const DEFAULT_STATE = {
-  dayBaseNumber: 1,
-  dayBaseDate: localDateKey(),
-  lastDailyResetDate: localDateKey(),
-  sections: [],
-  meters: []
-};
-
-/* =========================
-   Migrate
-   ========================= */
-function migrateIfNeeded(st){
-  if(!st || typeof st !== "object") return structuredClone(DEFAULT_STATE);
-
-  if((st.dayBaseNumber == null || st.dayBaseDate == null) && typeof st.dayTitle === "string"){
-    const m = st.dayTitle.match(/(\d+)/);
-    st.dayBaseNumber = m ? parseInt(m[1], 10) : 1;
-    st.dayBaseDate = localDateKey();
-    delete st.dayTitle;
-  }
-
-  if(st.dayBaseNumber == null) st.dayBaseNumber = 1;
-  if(st.dayBaseDate == null) st.dayBaseDate = localDateKey();
-  if(typeof st.lastDailyResetDate !== "string") st.lastDailyResetDate = localDateKey();
-  if(!Array.isArray(st.sections)) st.sections = [];
-  if(!Array.isArray(st.meters)) st.meters = [];
-
-  st.meters = st.meters.map(m => {
-    const defaultOpen = (m && typeof m.controlsOpen === "boolean") ? m.controlsOpen : true;
-
-    if(!m || typeof m !== "object") {
-      return { id: uid(), title:"Weekly Goal", goal:0, current:0, unitLabel:"units", controlsOpen: true };
+    function setCookie(name, value, days){
+      const expires = days ? "; expires=" + new Date(Date.now() + days*864e5).toUTCString() : "";
+      document.cookie = name + "=" + value + expires + "; path=/; SameSite=Lax";
+    }
+    function getCookie(name){
+      const match = document.cookie.match(new RegExp("(^| )" + name.replace(/[.$?*|{}()[\]\\/+^]/g, "\\$&") + "=([^;]+)"));
+      return match ? match[2] : null;
+    }
+    function eraseCookie(name){
+      document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
     }
 
-    if(m.goalMinutes != null || m.currentMinutes != null){
-      return {
-        id: m.id || uid(),
-        title: m.title || "Weekly Goal",
-        goal: +m.goalMinutes || 0,
-        current: +m.currentMinutes || 0,
-        unitLabel: "min",
-        controlsOpen: defaultOpen
-      };
+    // NOTE: btoa/atob expect latin1; use encode/decode wrappers for UTF-8 safety
+    function toB64(str){ return btoa(unescape(encodeURIComponent(str))); }
+    function fromB64(b64){ return decodeURIComponent(escape(atob(b64))); }
+
+    function saveStateToCookies(stateObj){
+      const json = JSON.stringify(stateObj);
+      const b64 = toB64(json);
+
+      const oldCount = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
+      for(let i=0;i<oldCount;i++) eraseCookie(COOKIE_PREFIX + i);
+
+      const chunks = [];
+      for(let i=0;i<b64.length;i+=CHUNK_SIZE) chunks.push(b64.slice(i, i+CHUNK_SIZE));
+
+      setCookie(COOKIE_COUNT, String(chunks.length), COOKIE_DAYS);
+      chunks.forEach((chunk, i) => setCookie(COOKIE_PREFIX + i, chunk, COOKIE_DAYS));
     }
 
-    return {
-      id: m.id || uid(),
-      title: m.title || "Weekly Goal",
-      goal: Math.max(0, parseFloat(m.goal ?? 0)),
-      current: Math.max(0, parseFloat(m.current ?? 0)),
-      unitLabel: (typeof m.unitLabel === "string" && m.unitLabel.trim()) ? m.unitLabel.trim() : "units",
-      controlsOpen: defaultOpen
-    };
-  });
+    function loadStateFromCookies(){
+      const count = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
+      if(!count) return null;
 
-  return st;
-}
-
-let state = migrateIfNeeded(loadStateFromCookies() || structuredClone(DEFAULT_STATE));
-
-/* =========================
-   Autosave (2s debounce)
-   ========================= */
-const SAVE_DEBOUNCE_MS = 1000;
-const saveStateEl = document.getElementById("saveState");
-let saveTimer = null;
-
-function markSaving(){ saveStateEl.textContent = "saving…"; }
-function markSaved(){ saveStateEl.textContent = "saved"; }
-
-function saveNow(){
-  try{
-    saveStateToCookies(state);
-    markSaved();
-  }catch(e){
-    console.error(e);
-    saveStateEl.textContent = "save failed";
-  }
-}
-function scheduleSave(){
-  markSaving();
-  if(saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveNow, SAVE_DEBOUNCE_MS);
-}
-
-/* =========================
-   Daily reset: uncheck everything once per new day
-   ========================= */
-function resetChecklistForNewDay(){
-  state.sections.forEach(sec => sec.items.forEach(it => { it.done = false; }));
-}
-function dailyResetIfNeeded(){
-  const today = localDateKey();
-  if(state.lastDailyResetDate !== today){
-    resetChecklistForNewDay();
-    state.lastDailyResetDate = today;
-    scheduleSave();
-    render();
-  }
-}
-
-/* =========================
-   Drag + drop between sections
-   ========================= */
-let dragInfo = null;
-function findSectionById(sectionId){
-  return state.sections.find(s => s.id === sectionId);
-}
-
-/* =========================
-   Rendering
-   ========================= */
-const sectionsRoot = document.getElementById("sectionsRoot");
-const metersRoot   = document.getElementById("metersRoot");
-const weekRowEl    = document.getElementById("weekRow");
-const weekPillEl   = document.getElementById("weekPill");
-
-function sectionCounts(section){
-  let total = 0, done = 0;
-  section.items.forEach(it => { total++; if(it.done) done++; });
-  return { done, total };
-}
-
-function renderWeekInfo(){
-  const now = new Date();
-  const monday = startOfWeekMonday(now);
-  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
-
-  const label = weekProgressLabel(now);
-  const range = `${formatDateShort(monday)} → ${formatDateShort(sunday)}`;
-
-  weekRowEl.innerHTML = `
-    <span class="pill">${range}</span>
-  `;
-  weekPillEl.textContent = `Week: ${label}`;
-}
-
-function render(){
-  const dayTitleEl = document.getElementById("dayTitle");
-  const computed = computeDayTitle(state);
-  if(document.activeElement !== dayTitleEl && dayTitleEl.textContent !== computed){
-    dayTitleEl.textContent = computed;
-  }
-
-  renderWeekInfo();
-
-  // Sections
-  sectionsRoot.innerHTML = "";
-  if(state.sections.length === 0){
-    const hint = document.createElement("div");
-    hint.className = "emptyHint";
-    hint.textContent = "No sections yet. Click “+ Add Section” to start your checklist.";
-    sectionsRoot.appendChild(hint);
-  }
-
-  state.sections.forEach(section => {
-    const sec = document.createElement("div");
-    sec.className = "section";
-
-    const top = document.createElement("div");
-    top.className = "sectionTop";
-
-    // LEFT: title
-    const left = document.createElement("div");
-    left.className = "sectionLeft";
-
-    const name = document.createElement("div");
-    name.className = "sectionName";
-    name.contentEditable = "true";
-    name.spellcheck = false;
-    name.textContent = section.title || "Untitled";
-    name.addEventListener("input", () => {
-      section.title = name.textContent.trim() || "Untitled";
-      scheduleSave();
-    });
-
-    left.appendChild(name);
-
-    // RIGHT: Done pill (delete moved to bottom)
-    const actions = document.createElement("div");
-    actions.className = "sectionActions";
-
-    const donePill = document.createElement("span");
-    donePill.className = "pill";
-    const counts = sectionCounts(section);
-    donePill.textContent = `Done: ${counts.done}/${counts.total}`;
-
-    actions.appendChild(donePill);
-
-    top.appendChild(left);
-    top.appendChild(actions);
-
-    const ul = document.createElement("ul");
-    ul.className = "items";
-    ul.dataset.sectionId = section.id;
-
-    ul.addEventListener("dragover", (e) => { e.preventDefault(); ul.classList.add("drag-over"); });
-    ul.addEventListener("dragleave", () => ul.classList.remove("drag-over"));
-    ul.addEventListener("drop", (e) => {
-      e.preventDefault();
-      ul.classList.remove("drag-over");
-      if(!dragInfo) return;
-
-      const toSectionId = ul.dataset.sectionId;
-      const fromSection = findSectionById(dragInfo.fromSectionId);
-      const toSection   = findSectionById(toSectionId);
-      if(!fromSection || !toSection) return;
-
-      const fromIndex = fromSection.items.findIndex(it => it.id === dragInfo.itemId);
-      if(fromIndex < 0) return;
-
-      const [movedItem] = fromSection.items.splice(fromIndex, 1);
-
-      const liTarget = e.target.closest("li.item");
-      if(liTarget?.dataset?.itemId){
-        const beforeId = liTarget.dataset.itemId;
-        const insertIndex = toSection.items.findIndex(it => it.id === beforeId);
-        if(insertIndex >= 0) toSection.items.splice(insertIndex, 0, movedItem);
-        else toSection.items.push(movedItem);
-      }else{
-        toSection.items.push(movedItem);
+      let b64 = "";
+      for(let i=0;i<count;i++){
+        const part = getCookie(COOKIE_PREFIX + i);
+        if(part == null) return null;
+        b64 += part;
       }
 
-      dragInfo = null;
-      scheduleSave();
-      render();
-    });
-
-    section.items.forEach(item => {
-      const li = document.createElement("li");
-      li.className = "item" + (item.required ? " required" : "") + (item.done ? " done" : "");
-      li.dataset.sectionId = section.id;
-      li.dataset.itemId = item.id;
-      li.draggable = true;
-
-      li.addEventListener("dragstart", (e) => {
-        dragInfo = { fromSectionId: section.id, itemId: item.id };
-        li.classList.add("dragging");
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", item.id);
-      });
-      li.addEventListener("dragend", () => li.classList.remove("dragging"));
-
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.checked = !!item.done;
-      cb.addEventListener("change", () => {
-        item.done = cb.checked;
-        scheduleSave();
-        render();
-      });
-
-      const txt = document.createElement("div");
-      txt.className = "itemText";
-      txt.contentEditable = "true";
-      txt.spellcheck = false;
-      txt.textContent = item.text || "";
-      txt.addEventListener("input", () => {
-        item.text = txt.textContent;
-        scheduleSave();
-      });
-
-      const dailyBtn = document.createElement("button");
-      dailyBtn.className = "tinyBtn accent";
-      dailyBtn.textContent = item.required ? "Daily" : "Today";
-      dailyBtn.addEventListener("click", () => {
-        item.required = !item.required;
-        scheduleSave();
-        render();
-      });
-
-      const delBtn = document.createElement("button");
-      delBtn.className = "tinyBtn danger";
-      delBtn.textContent = "✕";
-      delBtn.addEventListener("click", () => {
-        section.items = section.items.filter(it => it.id !== item.id);
-        scheduleSave();
-        render();
-      });
-
-      li.appendChild(cb);
-      li.appendChild(txt);
-      li.appendChild(dailyBtn);
-      li.appendChild(delBtn);
-      ul.appendChild(li);
-    });
-
-    const addRow = document.createElement("div");
-    addRow.className = "addRow";
-
-    const addInput = document.createElement("input");
-    addInput.className = "input";
-    addInput.placeholder = "Add a new item… (press Enter)";
-    addInput.addEventListener("keydown", (e) => {
-      if(e.key === "Enter"){ e.preventDefault(); addBtn.click(); }
-    });
-
-    const reqWrap = document.createElement("label");
-    reqWrap.className = "checkPill";
-    reqWrap.innerHTML = `<input type="checkbox"> <span>Daily</span>`;
-    const reqBox = reqWrap.querySelector("input");
-
-    const addBtn = document.createElement("button");
-    addBtn.className = "btn primary";
-    addBtn.textContent = "Add";
-    addBtn.addEventListener("click", () => {
-      const val = addInput.value.trim();
-      if(!val) return;
-      section.items.push({ id: uid(), text: val, done: false, required: reqBox.checked });
-      addInput.value = "";
-      reqBox.checked = false;
-      scheduleSave();
-      render();
-    });
-
-    addRow.appendChild(addInput);
-    addRow.appendChild(reqWrap);
-    addRow.appendChild(addBtn);
-
-    // NEW: section delete at bottom
-    const bottomActions = document.createElement("div");
-    bottomActions.className = "sectionBottomActions";
-
-    const delSec = document.createElement("button");
-    delSec.className = "tinyBtn danger";
-    delSec.textContent = "Delete";
-    delSec.addEventListener("click", () => {
-      if(!confirm(`Delete section "${section.title}"?`)) return;
-      state.sections = state.sections.filter(s => s.id !== section.id);
-      scheduleSave();
-      render();
-    });
-
-    bottomActions.appendChild(delSec);
-
-    sec.appendChild(top);
-    sec.appendChild(ul);
-    sec.appendChild(addRow);
-    sec.appendChild(bottomActions);
-    sectionsRoot.appendChild(sec);
-  });
-
-  // Weekly goals
-  metersRoot.innerHTML = "";
-  if(state.meters.length === 0){
-    const hint = document.createElement("div");
-    hint.className = "emptyHint";
-    hint.textContent = "No weekly goals yet. Click “+ Add Goal” to create one.";
-    metersRoot.appendChild(hint);
-  }
-
-  state.meters.forEach(meter => {
-    const card = document.createElement("div");
-    card.className = "meterCard";
-
-    const top = document.createElement("div");
-    top.className = "meterTop";
-
-    const left = document.createElement("div");
-    left.className = "meterTopLeft";
-
-    const name = document.createElement("div");
-    name.className = "meterName";
-    name.contentEditable = "true";
-    name.spellcheck = false;
-    name.textContent = meter.title || "Weekly Goal";
-    name.addEventListener("input", () => {
-      meter.title = name.textContent.trim() || "Weekly Goal";
-      scheduleSave();
-    });
-
-    left.appendChild(name);
-
-    const meta = document.createElement("div");
-    meta.className = "meterMeta";
-
-    const progressPill = document.createElement("span");
-    progressPill.className = "pill";
-
-    top.appendChild(left);
-    top.appendChild(meta);
-    meta.appendChild(progressPill);
-
-    const barRow = document.createElement("div");
-    barRow.className = "barRow";
-
-    const bar = document.createElement("div");
-    bar.className = "bar";
-    const fill = document.createElement("div");
-    fill.className = "fill";
-    bar.appendChild(fill);
-
-    const pctPill = document.createElement("span");
-    pctPill.className = "pill";
-
-    barRow.appendChild(bar);
-    barRow.appendChild(pctPill);
-
-    // Accordion controls
-    const isOpen = (typeof meter.controlsOpen === "boolean") ? meter.controlsOpen : true;
-
-    const controls = document.createElement("div");
-    controls.className = "meterControls" + (isOpen ? "" : " closed");
-
-    const accHeader = document.createElement("button");
-    accHeader.type = "button";
-    accHeader.className = "meterAccordionHeader";
-    accHeader.innerHTML = `
-      <span class="meterAccordionLeft">
-        <span class="meterCaret">▾</span>
-        <span class="meterAccordionTitle">Controls</span>
-      </span>
-      <span class="pill" style="opacity:.85;">${isOpen ? "Hide" : "Show"}</span>
-    `;
-    accHeader.addEventListener("click", () => {
-      meter.controlsOpen = !((typeof meter.controlsOpen === "boolean") ? meter.controlsOpen : true);
-      scheduleSave();
-      render();
-    });
-
-    const accBody = document.createElement("div");
-    accBody.className = "meterAccordionBody";
-
-    const unitGroup = document.createElement("div");
-    unitGroup.className = "controlGroup";
-    unitGroup.innerHTML = `<div class="label">Unit</div>`;
-    const unitInput = document.createElement("input");
-    unitInput.className = "smallInput";
-    unitInput.type = "text";
-    unitInput.value = (meter.unitLabel || "units").trim() || "units";
-    unitInput.placeholder = "min";
-    unitInput.addEventListener("input", () => {
-      meter.unitLabel = unitInput.value.trim() || "units";
-      updateMeterUI();
-      scheduleSave();
-    });
-    unitGroup.appendChild(unitInput);
-
-    const goalGroup = document.createElement("div");
-    goalGroup.className = "controlGroup";
-    const goalLabel = document.createElement("div");
-    goalLabel.className = "label";
-    goalGroup.appendChild(goalLabel);
-    const goalInput = document.createElement("input");
-    goalInput.className = "smallInput";
-    goalInput.type = "number";
-    goalInput.min = "0";
-    goalInput.step = "1";
-    goalInput.value = Math.max(0, parseFloat(meter.goal || 0));
-    goalInput.addEventListener("input", () => {
-      meter.goal = Math.max(0, parseFloat(goalInput.value || "0"));
-      updateMeterUI();
-      scheduleSave();
-    });
-    goalGroup.appendChild(goalInput);
-
-    const progGroup = document.createElement("div");
-    progGroup.className = "controlGroup";
-    progGroup.style.gridColumn = "1 / -1";
-    progGroup.innerHTML = `<div class="label">Progress</div>`;
-
-    const progRow = document.createElement("div");
-    progRow.className = "progressRow";
-
-    const addVal = document.createElement("input");
-    addVal.className = "smallInput";
-    addVal.type = "number";
-    addVal.min = "0";
-    addVal.step = "1";
-
-    const addBtn2 = document.createElement("button");
-    addBtn2.className = "btn primary";
-    addBtn2.textContent = "+ Add";
-    addBtn2.addEventListener("click", () => {
-      const v = Math.max(0, parseFloat(addVal.value || "0"));
-      if(!v) return;
-      meter.current = Math.max(0, parseFloat(meter.current || 0) + v);
-      addVal.value = "";
-      updateMeterUI();
-      scheduleSave();
-    });
-
-    const setBtn = document.createElement("button");
-    setBtn.className = "btn";
-    setBtn.textContent = "Set";
-    setBtn.addEventListener("click", () => {
-      const unit = ((meter.unitLabel || "units").trim() || "units");
-      const v = prompt(`Set "${meter.title}" current ${unit} to:`, String(meter.current || 0));
-      if(v == null) return;
-      const n = Math.max(0, parseFloat(v || "0"));
-      if(Number.isNaN(n)) return;
-      meter.current = n;
-      updateMeterUI();
-      scheduleSave();
-    });
-
-    const resetOneBtn = document.createElement("button");
-    resetOneBtn.className = "btn danger";
-    resetOneBtn.textContent = "Reset";
-    resetOneBtn.addEventListener("click", () => {
-      meter.current = 0;
-      updateMeterUI();
-      scheduleSave();
-    });
-
-    addVal.addEventListener("keydown", (e) => {
-      if(e.key === "Enter"){ e.preventDefault(); addBtn2.click(); }
-    });
-
-    progRow.appendChild(addVal);
-    progRow.appendChild(addBtn2);
-    progRow.appendChild(setBtn);
-    progRow.appendChild(resetOneBtn);
-    progGroup.appendChild(progRow);
-
-    // Delete inside accordion
-    const delRow = document.createElement("div");
-    delRow.className = "meterAccordionFooter";
-
-    const delGoal = document.createElement("button");
-    delGoal.className = "btn danger";
-    delGoal.textContent = "Delete Goal";
-    delGoal.addEventListener("click", () => {
-      if(!confirm(`Delete goal "${meter.title}"?`)) return;
-      state.meters = state.meters.filter(m => m.id !== meter.id);
-      scheduleSave();
-      render();
-    });
-    delRow.appendChild(delGoal);
-
-    accBody.appendChild(unitGroup);
-    accBody.appendChild(goalGroup);
-    accBody.appendChild(progGroup);
-    accBody.appendChild(delRow);
-
-    controls.appendChild(accHeader);
-    controls.appendChild(accBody);
-
-    card.appendChild(top);
-    card.appendChild(barRow);
-    card.appendChild(controls);
-
-    function updateMeterUI(){
-      const unit = ((meter.unitLabel || "units").trim() || "units");
-      const goal = Math.max(0, parseFloat(meter.goal || 0));
-      const current = Math.max(0, parseFloat(meter.current || 0));
-      const pct = Math.min(100, goal > 0 ? (current / goal) * 100 : 0);
-      const pctText = isFinite(pct) ? pct.toFixed(0) : "0";
-
-      progressPill.textContent = `${current}/${goal} ${unit}`;
-      pctPill.textContent = `${pctText}%`;
-      fill.style.width = Math.min(100, Math.max(0, pct)) + "%";
-
-      goalLabel.textContent = `Goal (${unit})`;
-      addVal.placeholder = `Add ${unit}…`;
-      setBtn.title = `Set current ${unit}`;
+      try{
+        const json = fromB64(b64);
+        return JSON.parse(json);
+      }catch(e){
+        console.warn("Failed to parse cookie state:", e);
+        return null;
+      }
     }
-    updateMeterUI();
 
-    metersRoot.appendChild(card);
-  });
-}
+    /* =========================
+       Helpers
+       ========================= */
+    const DAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-/* =========================
-   Actions
-   ========================= */
-document.getElementById("dayTitle").addEventListener("input", (e) => {
-  const txt = e.target.textContent.trim();
-  const m = txt.match(/(\d+)/);
-  if(m){
-    state.dayBaseNumber = parseInt(m[1], 10);
-    state.dayBaseDate = localDateKey();
-    scheduleSave();
-  }
-});
+    function uid(){
+      return Math.random().toString(16).slice(2) + Date.now().toString(16);
+    }
 
-document.getElementById("addSectionBtn").addEventListener("click", () => {
-  state.sections.push({ id: uid(), title: "New Section", items: [] });
-  scheduleSave();
-  render();
-});
+    function localDateKey(d = new Date()){
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
 
-document.getElementById("addGoalBtn").addEventListener("click", () => {
-  // NEW: controlsOpen defaults to true so a newly created goal auto-shows its accordion
-  state.meters.push({ id: uid(), title: "New Goal", goal: 0, current: 0, unitLabel: "units", controlsOpen: true });
-  scheduleSave();
-  render();
-});
+    function daysBetweenLocal(isoStart, isoEnd){
+      const [sy, sm, sd] = isoStart.split("-").map(Number);
+      const [ey, em, ed] = isoEnd.split("-").map(Number);
+      // use noon to avoid DST boundary weirdness
+      const start = new Date(sy, sm-1, sd, 12, 0, 0);
+      const end   = new Date(ey, em-1, ed, 12, 0, 0);
+      return Math.round((end - start) / 86400000);
+    }
 
-document.getElementById("resetWeekBtn").addEventListener("click", () => {
-  if(!confirm("Reset ALL weekly goals progress to 0?")) return;
-  state.meters.forEach(m => m.current = 0);
-  scheduleSave();
-  render();
-});
+    function computeDayTitle(st){
+      const today = localDateKey();
+      const diff = daysBetweenLocal(st.dayBaseDate, today);
+      const dayNumber = Math.max(1, st.dayBaseNumber + diff);
+      return `Day ${dayNumber}`;
+    }
 
-document.getElementById("resetBtn").addEventListener("click", () => {
-  if(!confirm("Reset EVERYTHING back to empty?")) return;
+    function formatLocalDateTime(ts){
+      try{
+        const d = new Date(ts);
+        if(Number.isNaN(d.getTime())) return String(ts || "");
+        return d.toLocaleString(undefined, {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }catch{
+        return String(ts || "");
+      }
+    }
 
-  const count = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
-  for(let i=0;i<count;i++) eraseCookie(COOKIE_PREFIX + i);
-  eraseCookie(COOKIE_COUNT);
+    function startOfWeekMonday(d = new Date()){
+      const noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0);
+      const dow = noon.getDay();
+      const offset = (dow + 6) % 7; // Monday = 0
+      const monday = new Date(noon);
+      monday.setDate(noon.getDate() - offset);
+      return monday;
+    }
 
-  state = structuredClone(DEFAULT_STATE);
-  state.dayBaseDate = localDateKey();
-  state.lastDailyResetDate = localDateKey();
+    function formatDateShort(d){
+      const y = d.getFullYear();
+      const m = String(d.getMonth()+1).padStart(2,"0");
+      const day = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m}-${day}`;
+    }
 
-  scheduleSave();
-  render();
-});
+    function weekProgressLabel(d = new Date()){
+      const dow = d.getDay();
+      const n = ((dow + 6) % 7) + 1;
+      return `${DAY_NAMES[dow]} • ${n}/7`;
+    }
 
-document.getElementById("exportBtn").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "daily-checklist-state.json";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-});
+    /* =========================
+       Defaults (EMPTY by default)
+       ========================= */
+    const DEFAULT_STATE = {
+      dayBaseNumber: 1,
+      dayBaseDate: localDateKey(),
+      lastDailyResetDate: localDateKey(),
+      sections: [],
+      meters: [],
 
-document.getElementById("importBtn").addEventListener("click", () => {
-  document.getElementById("importFile").click();
-});
-document.getElementById("importFile").addEventListener("change", async (e) => {
-  const file = e.target.files && e.target.files[0];
-  if(!file) return;
-  try{
-    const text = await file.text();
-    const obj = migrateIfNeeded(JSON.parse(text));
-    if(!obj || typeof obj !== "object") throw new Error("Invalid JSON");
-    if(!Array.isArray(obj.sections) || !Array.isArray(obj.meters)) throw new Error("Missing sections/meters");
-    state = obj;
+      // NEW: Auto-add tasks on specific weekdays
+      // JS getDay(): 0=Sun, 1=Mon, ... 5=Fri, 6=Sat
+      // Edit these two lines to your real Friday/Sunday tasks.
+      scheduledTemplates: [
+        { id: "fri-important", text: "🔥 Post in Blue Belt Accountability", days: [5], sectionTitle: "Important", priority: "high" },
+        { id: "sun-important", text: "🔥 Complete Goal Crushers (End & Beginning of Week)", days: [0], sectionTitle: "Important", priority: "high" }
+      ]
+    };
+
+    /* =========================
+       Migration / sanitation
+       ========================= */
+    function sanitizeHistoryEntry(e){
+      if(!e || typeof e !== "object") return null;
+      const amount = Math.max(0, parseFloat(e.amount || 0));
+      if(!amount) return null;
+      const unit = (typeof e.unit === "string" && e.unit.trim()) ? e.unit.trim() : "units";
+      const ts = (typeof e.ts === "string" && e.ts.trim()) ? e.ts.trim() : new Date().toISOString();
+      return { id: e.id || uid(), ts, amount, unit };
+    }
+
+    function migrateIfNeeded(st){
+      if(!st || typeof st !== "object") return structuredClone(DEFAULT_STATE);
+
+      // legacy dayTitle => base number/date
+      if((st.dayBaseNumber == null || st.dayBaseDate == null) && typeof st.dayTitle === "string"){
+        const m = st.dayTitle.match(/(\d+)/);
+        st.dayBaseNumber = m ? parseInt(m[1], 10) : 1;
+        st.dayBaseDate = localDateKey();
+        delete st.dayTitle;
+      }
+
+      if(st.dayBaseNumber == null) st.dayBaseNumber = 1;
+      if(st.dayBaseDate == null) st.dayBaseDate = localDateKey();
+      if(typeof st.lastDailyResetDate !== "string") st.lastDailyResetDate = localDateKey();
+      if(!Array.isArray(st.sections)) st.sections = [];
+      if(!Array.isArray(st.meters)) st.meters = [];
+
+      // NEW: add scheduledTemplates if missing (for existing saved states)
+      if(!Array.isArray(st.scheduledTemplates)){
+        st.scheduledTemplates = structuredClone(DEFAULT_STATE.scheduledTemplates);
+      }
+
+      st.meters = st.meters.map(m => {
+        const defaultOpen = (m && typeof m.controlsOpen === "boolean") ? m.controlsOpen : true;
+        const history = Array.isArray(m?.history)
+          ? m.history.map(sanitizeHistoryEntry).filter(Boolean)
+          : [];
+
+        if(!m || typeof m !== "object"){
+          return {
+            id: uid(),
+            title:"Weekly Goal",
+            goal:0,
+            current:0,
+            unitLabel:"units",
+            controlsOpen: true,
+            history
+          };
+        }
+
+        // legacy minutes schema
+        if(m.goalMinutes != null || m.currentMinutes != null){
+          return {
+            id: m.id || uid(),
+            title: m.title || "Weekly Goal",
+            goal: +m.goalMinutes || 0,
+            current: +m.currentMinutes || 0,
+            unitLabel: "min",
+            controlsOpen: defaultOpen,
+            history
+          };
+        }
+
+        return {
+          id: m.id || uid(),
+          title: m.title || "Weekly Goal",
+          goal: Math.max(0, parseFloat(m.goal ?? 0)),
+          current: Math.max(0, parseFloat(m.current ?? 0)),
+          unitLabel: (typeof m.unitLabel === "string" && m.unitLabel.trim()) ? m.unitLabel.trim() : "units",
+          controlsOpen: defaultOpen,
+          history
+        };
+      });
+
+      return st;
+    }
+
+    /* =========================
+       State + autosave
+       ========================= */
+    let state = migrateIfNeeded(loadStateFromCookies() || structuredClone(DEFAULT_STATE));
+
+    const SAVE_DEBOUNCE_MS = 1000;
+    const saveStateEl = document.getElementById("saveState");
+    let saveTimer = null;
+
+    function markSaving(){ saveStateEl.textContent = "saving…"; }
+    function markSaved(){ saveStateEl.textContent = "saved"; }
+
+    function saveNow(){
+      try{
+        saveStateToCookies(state);
+        markSaved();
+      }catch(e){
+        console.error(e);
+        saveStateEl.textContent = "save failed";
+      }
+    }
+
+    function scheduleSave(){
+      markSaving();
+      if(saveTimer) clearTimeout(saveTimer);
+      saveTimer = setTimeout(saveNow, SAVE_DEBOUNCE_MS);
+    }
+
+    /* =========================
+       NEW: Scheduled tasks injection
+       ========================= */
+    function getOrCreateSectionByTitle(title){
+      const clean = (title || "Important").trim() || "Important";
+      let sec = state.sections.find(s => (s.title || "").trim() === clean);
+      if(!sec){
+        sec = { id: uid(), title: clean, items: [] };
+        state.sections.unshift(sec); // put at top
+      }
+      return sec;
+    }
+
+    function applyScheduledTasksForToday(){
+      const todayKey = localDateKey();
+      const dow = new Date().getDay(); // 0 Sun ... 5 Fri
+      const templates = state.scheduledTemplates || [];
+
+      templates.forEach(t => {
+        if(!t.days?.includes(dow)) return;
+
+        const sec = getOrCreateSectionByTitle(t.sectionTitle || "Important");
+
+        // Dedupe: only one instance per template per day
+        const alreadyThere = sec.items.some(it =>
+          it.templateId === t.id && it.forDate === todayKey
+        );
+        if(alreadyThere) return;
+
+        sec.items.unshift({
+          id: uid(),
+          text: t.text,
+          done: false,
+          required: false,
+          templateId: t.id,
+          forDate: todayKey,
+          priority: t.priority || "high"
+        });
+      });
+    }
+
+    /* =========================
+       Daily reset
+       ========================= */
+    function resetChecklistForNewDay(){
+      state.sections.forEach(sec => sec.items.forEach(it => { it.done = false; }));
+    }
+
+    function dailyResetIfNeeded(){
+      const today = localDateKey();
+      if(state.lastDailyResetDate !== today){
+        resetChecklistForNewDay();
+        state.lastDailyResetDate = today;
+
+        // NEW: add scheduled tasks for the new day
+        applyScheduledTasksForToday();
+
+        scheduleSave();
+        render();
+      }
+    }
+
+    /* =========================
+       Drag/drop
+       ========================= */
+    let dragInfo = null;
+
+    function findSectionById(sectionId){
+      return state.sections.find(s => s.id === sectionId);
+    }
+
+    /* =========================
+       Rendering
+       ========================= */
+    const sectionsRoot = document.getElementById("sectionsRoot");
+    const metersRoot   = document.getElementById("metersRoot");
+    const weekRowEl    = document.getElementById("weekRow");
+    const weekPillEl   = document.getElementById("weekPill");
+
+    function sectionCounts(section){
+      let total = 0, done = 0;
+      section.items.forEach(it => { total++; if(it.done) done++; });
+      return { done, total };
+    }
+
+    function renderWeekInfo(){
+      const now = new Date();
+      const monday = startOfWeekMonday(now);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+
+      const label = weekProgressLabel(now);
+      const range = `${formatDateShort(monday)} → ${formatDateShort(sunday)}`;
+
+      weekRowEl.innerHTML = `<span class="pill">${range}</span>`;
+      weekPillEl.textContent = `Week: ${label}`;
+    }
+
+    function el(tag, props = {}, children = []){
+      const node = document.createElement(tag);
+      Object.entries(props).forEach(([k,v]) => {
+        if(k === "class") node.className = v;
+        else if(k === "text") node.textContent = v;
+        else if(k === "html") node.innerHTML = v;
+        else if(k.startsWith("data-")) node.setAttribute(k, v);
+        else if(k in node) node[k] = v;
+        else node.setAttribute(k, v);
+      });
+      children.forEach(ch => node.appendChild(ch));
+      return node;
+    }
+
+    function render(){
+      // computed Day title
+      const dayTitleEl = document.getElementById("dayTitle");
+      const computed = computeDayTitle(state);
+      if(document.activeElement !== dayTitleEl && dayTitleEl.textContent !== computed){
+        dayTitleEl.textContent = computed;
+      }
+
+      renderWeekInfo();
+
+      /* ========= Sections ========= */
+      sectionsRoot.innerHTML = "";
+      if(state.sections.length === 0){
+        sectionsRoot.appendChild(el("div", {
+          class: "emptyHint",
+          text: "No sections yet. Click “+ Add Section” to start your checklist."
+        }));
+      }
+
+      state.sections.forEach(section => {
+        const sec = el("div", { class: "section" });
+
+        const top = el("div", { class: "sectionTop" });
+        const left = el("div", { class: "sectionLeft" });
+
+        const name = el("div", {
+          class: "sectionName",
+          contentEditable: "true",
+          spellcheck: false,
+          text: section.title || "Untitled"
+        });
+        name.addEventListener("input", () => {
+          section.title = name.textContent.trim() || "Untitled";
+          scheduleSave();
+        });
+
+        left.appendChild(name);
+
+        const actions = el("div", { class: "sectionActions" });
+
+        const donePill = el("span", { class: "pill" });
+        const counts = sectionCounts(section);
+        donePill.textContent = `Done: ${counts.done}/${counts.total}`;
+        actions.appendChild(donePill);
+
+        top.appendChild(left);
+        top.appendChild(actions);
+
+        const ul = el("ul", { class: "items" });
+        ul.dataset.sectionId = section.id;
+
+        ul.addEventListener("dragover", (e) => { e.preventDefault(); ul.classList.add("drag-over"); });
+        ul.addEventListener("dragleave", () => ul.classList.remove("drag-over"));
+        ul.addEventListener("drop", (e) => {
+          e.preventDefault();
+          ul.classList.remove("drag-over");
+          if(!dragInfo) return;
+
+          const toSectionId = ul.dataset.sectionId;
+          const fromSection = findSectionById(dragInfo.fromSectionId);
+          const toSection   = findSectionById(toSectionId);
+          if(!fromSection || !toSection) return;
+
+          const fromIndex = fromSection.items.findIndex(it => it.id === dragInfo.itemId);
+          if(fromIndex < 0) return;
+
+          const [movedItem] = fromSection.items.splice(fromIndex, 1);
+
+          const liTarget = e.target.closest("li.item");
+          if(liTarget?.dataset?.itemId){
+            const beforeId = liTarget.dataset.itemId;
+            const insertIndex = toSection.items.findIndex(it => it.id === beforeId);
+            if(insertIndex >= 0) toSection.items.splice(insertIndex, 0, movedItem);
+            else toSection.items.push(movedItem);
+          }else{
+            toSection.items.push(movedItem);
+          }
+
+          dragInfo = null;
+          scheduleSave();
+          render();
+        });
+
+        section.items.forEach(item => {
+          const li = el("li", {
+            class:
+              "item" +
+              (item.required ? " required" : "") +
+              (item.done ? " done" : "") +
+              (item.priority === "high" ? " priority-high" : "")
+          });
+          li.dataset.sectionId = section.id;
+          li.dataset.itemId = item.id;
+          li.draggable = true;
+
+          li.addEventListener("dragstart", (e) => {
+            dragInfo = { fromSectionId: section.id, itemId: item.id };
+            li.classList.add("dragging");
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", item.id);
+          });
+          li.addEventListener("dragend", () => li.classList.remove("dragging"));
+
+          const cb = el("input", { type: "checkbox" });
+          cb.checked = !!item.done;
+
+          // NEW: make important tasks checkbox red
+          if(item.priority === "high"){
+            cb.style.accentColor = "var(--danger)";
+          }
+
+          cb.addEventListener("change", () => {
+            item.done = cb.checked;
+            scheduleSave();
+            render();
+          });
+
+          const txt = el("div", {
+            class: "itemText",
+            contentEditable: "true",
+            spellcheck: false,
+            text: item.text || ""
+          });
+          txt.addEventListener("input", () => {
+            item.text = txt.textContent;
+            scheduleSave();
+          });
+
+          const dailyBtn = el("button", {
+            class: "tinyBtn accent",
+            text: item.required ? "Daily" : "Today"
+          });
+          dailyBtn.addEventListener("click", () => {
+            item.required = !item.required;
+            scheduleSave();
+            render();
+          });
+
+          const delBtn = el("button", { class: "tinyBtn danger", text: "✕" });
+          delBtn.addEventListener("click", () => {
+            section.items = section.items.filter(it => it.id !== item.id);
+            scheduleSave();
+            render();
+          });
+
+          li.appendChild(cb);
+          li.appendChild(txt);
+          li.appendChild(dailyBtn);
+          li.appendChild(delBtn);
+
+          ul.appendChild(li);
+        });
+
+        // add row
+        const addRow = el("div", { class: "addRow" });
+
+        const addInput = el("input", {
+          class: "input",
+          placeholder: "Add a new item… (press Enter)"
+        });
+        addInput.addEventListener("keydown", (e) => {
+          if(e.key === "Enter"){ e.preventDefault(); addBtn.click(); }
+        });
+
+        const reqWrap = el("label", { class: "checkPill" });
+        reqWrap.innerHTML = `<input type="checkbox"> <span>Daily</span>`;
+        const reqBox = reqWrap.querySelector("input");
+
+        const addBtn = el("button", { class: "btn primary", text: "Add" });
+        addBtn.addEventListener("click", () => {
+          const val = addInput.value.trim();
+          if(!val) return;
+          section.items.push({ id: uid(), text: val, done: false, required: reqBox.checked });
+          addInput.value = "";
+          reqBox.checked = false;
+          scheduleSave();
+          render();
+        });
+
+        addRow.appendChild(addInput);
+        addRow.appendChild(reqWrap);
+        addRow.appendChild(addBtn);
+
+        // bottom actions
+        const bottomActions = el("div", { class: "sectionBottomActions" });
+        const delSec = el("button", { class: "tinyBtn danger", text: "Delete" });
+        delSec.addEventListener("click", () => {
+          if(!confirm(`Delete section "${section.title}"?`)) return;
+          state.sections = state.sections.filter(s => s.id !== section.id);
+          scheduleSave();
+          render();
+        });
+        bottomActions.appendChild(delSec);
+
+        sec.appendChild(top);
+        sec.appendChild(ul);
+        sec.appendChild(addRow);
+        sec.appendChild(bottomActions);
+
+        sectionsRoot.appendChild(sec);
+      });
+
+      /* ========= Weekly goals ========= */
+      metersRoot.innerHTML = "";
+      if(state.meters.length === 0){
+        metersRoot.appendChild(el("div", {
+          class: "emptyHint",
+          text: "No weekly goals yet. Click “+ Add Goal” to create one."
+        }));
+      }
+
+      state.meters.forEach(meter => {
+        if(!Array.isArray(meter.history)) meter.history = [];
+
+        const HISTORY_LIMIT = 60;
+
+        const card = el("div", { class: "meterCard" });
+
+        const top = el("div", { class: "meterTop" });
+        const left = el("div", { class: "meterTopLeft" });
+
+        const name = el("div", {
+          class: "meterName",
+          contentEditable: "true",
+          spellcheck: false,
+          text: meter.title || "Weekly Goal"
+        });
+        name.addEventListener("input", () => {
+          meter.title = name.textContent.trim() || "Weekly Goal";
+          scheduleSave();
+        });
+
+        left.appendChild(name);
+
+        const meta = el("div", { class: "meterMeta" });
+        const progressPill = el("span", { class: "pill" });
+        meta.appendChild(progressPill);
+
+        top.appendChild(left);
+        top.appendChild(meta);
+
+        const barRow = el("div", { class: "barRow" });
+        const bar = el("div", { class: "bar" });
+        const fill = el("div", { class: "fill" });
+        bar.appendChild(fill);
+
+        const pctPill = el("span", { class: "pill" });
+
+        barRow.appendChild(bar);
+        barRow.appendChild(pctPill);
+
+        const isOpen = (typeof meter.controlsOpen === "boolean") ? meter.controlsOpen : true;
+        const controls = el("div", { class: "meterControls" + (isOpen ? "" : " closed") });
+
+        const accHeader = el("button", { type: "button", class: "meterAccordionHeader" });
+        accHeader.innerHTML = `
+          <span class="meterAccordionLeft">
+            <span class="meterCaret">▾</span>
+            <span class="meterAccordionTitle">Controls</span>
+          </span>
+          <span class="pill" style="opacity:.85;">${isOpen ? "Hide" : "Show"}</span>
+        `;
+        accHeader.addEventListener("click", () => {
+          meter.controlsOpen = !((typeof meter.controlsOpen === "boolean") ? meter.controlsOpen : true);
+          scheduleSave();
+          render();
+        });
+
+        const accBody = el("div", { class: "meterAccordionBody" });
+
+        // unit
+        const unitGroup = el("div", { class: "controlGroup" });
+        unitGroup.appendChild(el("div", { class: "label", text: "Unit" }));
+        const unitInput = el("input", {
+          class: "smallInput",
+          type: "text",
+          value: (meter.unitLabel || "units").trim() || "units",
+          placeholder: "min"
+        });
+        unitInput.addEventListener("input", () => {
+          meter.unitLabel = unitInput.value.trim() || "units";
+          updateMeterUI();
+          scheduleSave();
+        });
+        unitGroup.appendChild(unitInput);
+
+        // goal
+        const goalGroup = el("div", { class: "controlGroup" });
+        const goalLabel = el("div", { class: "label" });
+        const goalInput = el("input", {
+          class: "smallInput",
+          type: "number",
+          min: "0",
+          step: "1",
+          value: Math.max(0, parseFloat(meter.goal || 0))
+        });
+        goalInput.addEventListener("input", () => {
+          meter.goal = Math.max(0, parseFloat(goalInput.value || "0"));
+          updateMeterUI();
+          scheduleSave();
+        });
+        goalGroup.appendChild(goalLabel);
+        goalGroup.appendChild(goalInput);
+
+        // progress controls
+        const progGroup = el("div", { class: "controlGroup" });
+        progGroup.style.gridColumn = "1 / -1";
+        progGroup.appendChild(el("div", { class: "label", text: "Progress" }));
+
+        const progRow = el("div", { class: "progressRow" });
+
+        const addVal = el("input", {
+          class: "smallInput",
+          type: "number",
+          min: "0",
+          step: "1"
+        });
+
+        function addHistory(amount){
+          const unit = ((meter.unitLabel || "units").trim() || "units");
+          meter.history.unshift({
+            id: uid(),
+            ts: new Date().toISOString(),
+            amount: Math.max(0, parseFloat(amount || 0)),
+            unit
+          });
+          if(meter.history.length > HISTORY_LIMIT) meter.history.length = HISTORY_LIMIT;
+        }
+
+        const addBtn2 = el("button", { class: "btn primary", text: "+ Add" });
+        addBtn2.addEventListener("click", () => {
+          const v = Math.max(0, parseFloat(addVal.value || "0"));
+          if(!v) return;
+
+          meter.current = Math.max(0, parseFloat(meter.current || 0) + v);
+          addHistory(v);
+
+          addVal.value = "";
+          updateMeterUI();
+          scheduleSave();
+          render(); // so history list updates immediately
+        });
+
+        const setBtn = el("button", { class: "btn", text: "Set" });
+        setBtn.addEventListener("click", () => {
+          const unit = ((meter.unitLabel || "units").trim() || "units");
+          const v = prompt(`Set "${meter.title}" current ${unit} to:`, String(meter.current || 0));
+          if(v == null) return;
+          const n = Math.max(0, parseFloat(v || "0"));
+          if(Number.isNaN(n)) return;
+          meter.current = n;
+          updateMeterUI();
+          scheduleSave();
+        });
+
+        const resetOneBtn = el("button", { class: "btn danger", text: "Reset" });
+        resetOneBtn.addEventListener("click", () => {
+          meter.current = 0;
+          updateMeterUI();
+          scheduleSave();
+        });
+
+        addVal.addEventListener("keydown", (e) => {
+          if(e.key === "Enter"){ e.preventDefault(); addBtn2.click(); }
+        });
+
+        progRow.appendChild(addVal);
+        progRow.appendChild(addBtn2);
+        progRow.appendChild(setBtn);
+        progRow.appendChild(resetOneBtn);
+        progGroup.appendChild(progRow);
+
+        // history group
+        const historyGroup = el("div", { class: "controlGroup" });
+        historyGroup.style.gridColumn = "1 / -1";
+
+        const historyHeader = el("div", { class: "historyHeaderRow" });
+        const historyLabel = el("div", { class: "label", text: "Add history" });
+        const clearHistoryBtn = el("button", { class: "tinyBtn danger", text: "Clear" });
+        clearHistoryBtn.title = "Clear add history for this goal";
+
+        clearHistoryBtn.addEventListener("click", () => {
+          if(!meter.history.length) return;
+          if(!confirm(`Clear add history for "${meter.title}"?`)) return;
+          meter.history = [];
+          scheduleSave();
+          render();
+        });
+
+        historyHeader.appendChild(historyLabel);
+        historyHeader.appendChild(clearHistoryBtn);
+
+        const historyList = el("ul", { class: "historyList" });
+        const historyEmpty = el("div", {
+          class: "historyEmpty",
+          text: "No adds yet. Use “+ Add” and entries will show up here with the amount + date/time."
+        });
+
+        function renderHistory(){
+          historyList.innerHTML = "";
+          const entries = Array.isArray(meter.history) ? meter.history : [];
+
+          if(entries.length === 0){
+            historyList.style.display = "none";
+            historyEmpty.style.display = "block";
+            clearHistoryBtn.style.opacity = .5;
+            clearHistoryBtn.disabled = true;
+            return;
+          }
+
+          historyList.style.display = "block";
+          historyEmpty.style.display = "none";
+          clearHistoryBtn.style.opacity = 1;
+          clearHistoryBtn.disabled = false;
+
+          entries.forEach(entry => {
+            const li = el("li", { class: "historyItem" });
+
+            const left = el("div", { class: "historyLeft" });
+            const amt = el("div", { class: "historyAmt", text: `+${entry.amount} ${entry.unit}` });
+            const meta = el("div", { class: "historyMeta", text: formatLocalDateTime(entry.ts) });
+
+            left.appendChild(amt);
+            left.appendChild(meta);
+
+            const del = el("button", { class: "tinyBtn danger", text: "✕" });
+            del.title = "Remove this entry";
+            del.addEventListener("click", () => {
+              meter.history = (meter.history || []).filter(e => e.id !== entry.id);
+              scheduleSave();
+              render();
+            });
+
+            li.appendChild(left);
+            li.appendChild(del);
+            historyList.appendChild(li);
+          });
+        }
+
+        historyGroup.appendChild(historyHeader);
+        historyGroup.appendChild(historyList);
+        historyGroup.appendChild(historyEmpty);
+
+        // delete goal
+        const delRow = el("div", { class: "meterAccordionFooter" });
+        const delGoal = el("button", { class: "btn danger", text: "Delete Goal" });
+        delGoal.addEventListener("click", () => {
+          if(!confirm(`Delete goal "${meter.title}"?`)) return;
+          state.meters = state.meters.filter(m => m.id !== meter.id);
+          scheduleSave();
+          render();
+        });
+        delRow.appendChild(delGoal);
+
+        // assemble accordion body
+        accBody.appendChild(unitGroup);
+        accBody.appendChild(goalGroup);
+        accBody.appendChild(progGroup);
+        accBody.appendChild(historyGroup);
+        accBody.appendChild(delRow);
+
+        controls.appendChild(accHeader);
+        controls.appendChild(accBody);
+
+        card.appendChild(top);
+        card.appendChild(barRow);
+        card.appendChild(controls);
+
+        function updateMeterUI(){
+          const unit = ((meter.unitLabel || "units").trim() || "units");
+          const goal = Math.max(0, parseFloat(meter.goal || 0));
+          const current = Math.max(0, parseFloat(meter.current || 0));
+          const pct = Math.min(100, goal > 0 ? (current / goal) * 100 : 0);
+          const pctText = isFinite(pct) ? pct.toFixed(0) : "0";
+
+          progressPill.textContent = `${current}/${goal} ${unit}`;
+          pctPill.textContent = `${pctText}%`;
+          fill.style.width = Math.min(100, Math.max(0, pct)) + "%";
+
+          goalLabel.textContent = `Goal (${unit})`;
+          addVal.placeholder = `Add ${unit}…`;
+          setBtn.title = `Set current ${unit}`;
+        }
+
+        updateMeterUI();
+        renderHistory();
+        metersRoot.appendChild(card);
+      });
+    }
+
+    /* =========================
+       Actions
+       ========================= */
+    document.getElementById("dayTitle").addEventListener("input", (e) => {
+      const txt = e.target.textContent.trim();
+      const m = txt.match(/(\d+)/);
+      if(m){
+        state.dayBaseNumber = parseInt(m[1], 10);
+        state.dayBaseDate = localDateKey();
+        scheduleSave();
+      }
+    });
+
+    document.getElementById("addSectionBtn").addEventListener("click", () => {
+      state.sections.push({ id: uid(), title: "New Section", items: [] });
+      scheduleSave();
+      render();
+    });
+
+    document.getElementById("addGoalBtn").addEventListener("click", () => {
+      state.meters.push({
+        id: uid(),
+        title: "New Goal",
+        goal: 0,
+        current: 0,
+        unitLabel: "units",
+        controlsOpen: true,
+        history: []
+      });
+      scheduleSave();
+      render();
+    });
+
+    document.getElementById("resetWeekBtn").addEventListener("click", () => {
+      if(!confirm("Reset ALL weekly goals progress to 0?")) return;
+      state.meters.forEach(m => m.current = 0);
+      scheduleSave();
+      render();
+    });
+
+    document.getElementById("resetBtn").addEventListener("click", () => {
+      if(!confirm("Reset EVERYTHING back to empty?")) return;
+
+      const count = parseInt(getCookie(COOKIE_COUNT) || "0", 10);
+      for(let i=0;i<count;i++) eraseCookie(COOKIE_PREFIX + i);
+      eraseCookie(COOKIE_COUNT);
+
+      state = structuredClone(DEFAULT_STATE);
+      state.dayBaseDate = localDateKey();
+      state.lastDailyResetDate = localDateKey();
+
+      // make sure today's scheduled tasks appear after a full reset
+      applyScheduledTasksForToday();
+
+      scheduleSave();
+      render();
+    });
+
+    document.getElementById("exportBtn").addEventListener("click", () => {
+      const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "daily-checklist-state.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById("importBtn").addEventListener("click", () => {
+      document.getElementById("importFile").click();
+    });
+
+    document.getElementById("importFile").addEventListener("change", async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+
+      try{
+        const text = await file.text();
+        const obj = migrateIfNeeded(JSON.parse(text));
+        if(!obj || typeof obj !== "object") throw new Error("Invalid JSON");
+        if(!Array.isArray(obj.sections) || !Array.isArray(obj.meters)) throw new Error("Missing sections/meters");
+        state = obj;
+
+        // add scheduled tasks for today after import (deduped)
+        applyScheduledTasksForToday();
+
+        dailyResetIfNeeded();
+        scheduleSave();
+        render();
+      }catch(err){
+        alert("Import failed: " + err.message);
+      }finally{
+        e.target.value = "";
+      }
+    });
+
+    /* =========================
+       Midnight refresh
+       ========================= */
+    function scheduleMidnightRefresh(){
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2);
+      setTimeout(() => {
+        dailyResetIfNeeded();
+        render();
+        scheduleSave();
+        scheduleMidnightRefresh();
+      }, next - now);
+    }
+
+    /* =========================
+       Init
+       ========================= */
+    // Ensure today's scheduled tasks exist immediately on load (deduped)
+    applyScheduledTasksForToday();
+
     dailyResetIfNeeded();
-    scheduleSave();
     render();
-  }catch(err){
-    alert("Import failed: " + err.message);
-  }finally{
-    e.target.value = "";
-  }
-});
-
-/* =========================
-   Midnight: advance day + uncheck all items
-   ========================= */
-function scheduleMidnightRefresh(){
-  const now = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 2);
-  setTimeout(() => {
-    dailyResetIfNeeded();
-    render();
-    scheduleSave();
+    saveNow();
     scheduleMidnightRefresh();
-  }, next - now);
-}
-
-/* =========================
-   Init
-   ========================= */
-dailyResetIfNeeded();
-render();
-saveNow();
-scheduleMidnightRefresh();
-</script>
+  </script>
 </body>
 </html>
