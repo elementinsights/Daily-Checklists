@@ -736,17 +736,34 @@
       dayBaseNumber: 1,
       dayBaseDate: localDateKey(),
       lastDailyResetDate: localDateKey(),
-      sections: [],
+
+      sections: [
+        {
+          id: "sec-important",
+          title: "Daily Checklist",
+          items: [
+            { id: "imp-1", text: "Create Morning Plan & Post in #daily-checklist (Max 3 Daily Tasks)", done: false, required: true },
+            { id: "imp-2", text: "Post GM in Crypto Investing & Trading Campus", done: false, required: true },
+            { id: "imp-3", text: "Update Portfolio Based on Adam's Signals", done: false, required: true },
+            { id: "imp-4", text: "Daily Readings", done: false, required: true },
+            { id: "imp-5", text: "1 Hour of Time in the Crypto Trading Campus", done: false, required: true },
+            { id: "imp-6", text: "30 Minutes of Russian Listening", done: false, required: true },
+            { id: "imp-7", text: "Review All Anki Cards (Except Sunday)", done: false, required: true },
+            { id: "imp-8", text: "Add 3 New Anki Decks (Unless Finished For The Week)", done: false, required: true },
+            { id: "imp-9", text: "Review My Day & My Language", done: false, required: true },
+            { id: "imp-10", text: "Post End of Day Review in #daily-checklist", done: false, required: true }
+          ]
+        }
+      ],
+
       meters: [],
 
-      // NEW: Auto-add tasks on specific weekdays
-      // JS getDay(): 0=Sun, 1=Mon, ... 5=Fri, 6=Sat
-      // Edit these two lines to your real Friday/Sunday tasks.
       scheduledTemplates: [
-        { id: "fri-important", text: "🔥 Post in Blue Belt Accountability", days: [5], sectionTitle: "Important", priority: "high" },
-        { id: "sun-important", text: "🔥 Complete Goal Crushers (End & Beginning of Week)", days: [0], sectionTitle: "Important", priority: "high" }
+        { id: "fri-important", text: "🔥 Post in #blue-belt-accountability", days: [5], sectionTitle: "Daily Checklist", priority: "high" },
+        { id: "sun-important", text: "🔥 Post Goal Crushers (End & Beginning of Week)", days: [0], sectionTitle: "Daily Checklist", priority: "high" }
       ]
     };
+
 
     /* =========================
        Migration / sanitation
