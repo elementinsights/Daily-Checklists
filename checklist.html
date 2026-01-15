@@ -102,10 +102,10 @@
     }
 
     .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));
-      border:1px solid var(--border);
-      border-radius:16px;
-      box-shadow: var(--shadow);
+/*      background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.02));*/
+/*      border:1px solid var(--border);*/
+/*      border-radius:16px;*/
+/*      box-shadow: var(--shadow);*/
       overflow:hidden;
     }
     .cardHeader{
@@ -130,7 +130,7 @@
       border-radius:14px;
       background: rgba(0,0,0,.18);
       overflow:hidden;
-      margin-bottom:12px;
+      margin-bottom:25px;
     }
     .sectionTop{
       padding:10px 12px;
@@ -297,7 +297,7 @@
       border-radius:14px;
       background: rgba(0,0,0,.18);
       overflow:hidden;
-      margin-bottom:12px;
+      margin-bottom:25px;
     }
     .meterTop{
       padding:12px;
@@ -604,7 +604,7 @@
     /* =========================
        Cookie storage (chunked)
        ========================= */
-    const COOKIE_PREFIX = "dailyChecklistState_v7_";
+    const COOKIE_PREFIX = "dailyChecklistState_v8_";
     const COOKIE_COUNT  = COOKIE_PREFIX + "chunks";
     const COOKIE_DAYS   = 365;
     const CHUNK_SIZE    = 3200;
@@ -742,11 +742,11 @@
           id: "sec-important",
           title: "Daily Checklist",
           items: [
-            { id: "imp-1", text: "Create Morning Plan & Post in #daily-checklist (Max 3 Daily Tasks)", done: false, required: true },
+            { id: "imp-1", text: "Create Morning Plan & Post in #daily-checklist", done: false, required: true },
             { id: "imp-2", text: "Post GM in Crypto Investing & Trading Campus", done: false, required: true },
             { id: "imp-3", text: "Update Portfolio Based on Adam's Signals", done: false, required: true },
             { id: "imp-4", text: "Daily Readings", done: false, required: true },
-            { id: "imp-5", text: "1 Hour of Time in the Crypto Trading Campus", done: false, required: true },
+            { id: "imp-5", text: "1 Hour in Crypto Trading Campus (5 Max Per Week)", done: false, required: true },
             { id: "imp-6", text: "30 Minutes of Russian Listening", done: false, required: true },
             { id: "imp-7", text: "Review All Anki Cards (Except Sunday)", done: false, required: true },
             { id: "imp-8", text: "Add 3 New Anki Decks (Unless Finished For The Week)", done: false, required: true },
@@ -759,7 +759,7 @@
       meters: [],
 
       scheduledTemplates: [
-        { id: "fri-important", text: "🔥 Post in #blue-belt-accountability", days: [5], sectionTitle: "Daily Checklist", priority: "high" },
+        { id: "sat-important", text: "🔥 Post in #blue-belt-accountability", days: [6], sectionTitle: "Daily Checklist", priority: "high" },
         { id: "sun-important", text: "🔥 Post Goal Crushers (End & Beginning of Week)", days: [0], sectionTitle: "Daily Checklist", priority: "high" }
       ]
     };
@@ -798,6 +798,19 @@
       if(!Array.isArray(st.scheduledTemplates)){
         st.scheduledTemplates = structuredClone(DEFAULT_STATE.scheduledTemplates);
       }
+
+      // Fix existing saved template so it uses program day 6 (not weekday / old saved values)
+      if (Array.isArray(st.scheduledTemplates)) {
+        st.scheduledTemplates = st.scheduledTemplates.map(t => {
+          if (typeof t?.text === "string" && t.text.includes("#blue-belt-accountability")) {
+            // Force program Day 6
+            t.dayNumbers = [6];
+            delete t.days; // prevent weekday matching from re-adding it
+          }
+          return t;
+        });
+      }
+
 
       st.meters = st.meters.map(m => {
         const defaultOpen = (m && typeof m.controlsOpen === "boolean") ? m.controlsOpen : true;
@@ -887,11 +900,24 @@
 
     function applyScheduledTasksForToday(){
       const todayKey = localDateKey();
-      const dow = new Date().getDay(); // 0 Sun ... 5 Fri
       const templates = state.scheduledTemplates || [];
 
+      // PROGRAM day number (Day 1, Day 2, etc.)
+      const diff = daysBetweenLocal(state.dayBaseDate, todayKey);
+      const programDay = Math.max(1, state.dayBaseNumber + diff);
+
+      // Day-of-week (0 Sun ... 6 Sat) — keep for templates that still use `days`
+      const dow = new Date().getDay();
+
       templates.forEach(t => {
-        if(!t.days?.includes(dow)) return;
+        // Support BOTH styles:
+        // - t.dayNumbers = [6] means "program Day 6"
+        // - t.days = [6] means "Saturday"
+        const matches =
+          (Array.isArray(t.dayNumbers) && t.dayNumbers.includes(programDay)) ||
+          (Array.isArray(t.days) && t.days.includes(dow));
+
+        if(!matches) return;
 
         const sec = getOrCreateSectionByTitle(t.sectionTitle || "Important");
 
@@ -912,6 +938,7 @@
         });
       });
     }
+
 
     /* =========================
        Daily reset
